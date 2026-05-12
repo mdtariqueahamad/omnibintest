@@ -60,3 +60,12 @@ def seed_database():
     for testing the routing engine immediately.
     """
     return bin_service.seed_initial_bins()
+
+
+@router.post("/api/bins/randomize")
+def randomize_database():
+    """
+    Randomize the fill levels of all bins to simulate live urban activity for demonstration purposes.
+    """
+    bin_service.randomize_all_bins()
+    return {"message": "All bins have been successfully randomized."}

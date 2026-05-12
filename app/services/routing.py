@@ -4,15 +4,21 @@ import networkx as nx
 import numpy as np
 import requests
 import logging
-from sklearn.cluster import KMeans
+import concurrent.futures
 from app.services.bin_service import get_all_bins
+
+# Import OR-Tools for advanced CVRP multi-objective solving
+from ortools.constraint_solver import routing_enums_pb2
+from ortools.constraint_solver import pywrapcp
 
 logger = logging.getLogger(__name__)
 
 # Configuration Constants
-VAN_CAPACITY_LITERS = 500.0
+VAN_MAX_CAPACITY = 500.0  # Liters
 FUEL_CONSUMPTION_KM_PER_LITER = 5.5
 FUEL_PRICE_PER_LITER = 95.0
+FUEL_COST_PER_KM = FUEL_PRICE_PER_LITER / FUEL_CONSUMPTION_KM_PER_LITER  # ~17.27 INR/km
+VAN_DISPATCH_FIXED_COST = 500.0  # Flat synthetic penalty to force solver to minimize van usage
 
 START_DEPOT = {"lat": 23.2244, "lon": 77.4027, "id": "depot", "location": "Bhopal Nagar Nigam Building"}
 END_FACILITIES = [
@@ -193,88 +199,201 @@ def calculate_optimal_route() -> Dict[str, Any]:
             "message": "No bins require collection at this time."
         }
 
-    num_vans = max(1, math.ceil(total_volume / VAN_CAPACITY_LITERS))
+    # 1. Prepare Nodes for OR-Tools
+    # Node 0: Depot
+    # Node 1 to N: Target Bins
+    # Node N+1: Dummy End Node representing the closest Dump Site
     
-    # 1. Geographic Clustering via K-Means
-    coords = np.array([[b.get("latitude", 0), b.get("longitude", 0)] for b in target_bins])
+    num_bins = len(target_bins)
+    num_nodes = num_bins + 2
+    depot_index = 0
+    dummy_end_index = num_nodes - 1
     
-    if num_vans >= len(target_bins):
-        clusters = {i: [target_bins[i]] for i in range(len(target_bins))}
-    else:
-        kmeans = KMeans(n_clusters=num_vans, random_state=42, n_init=10)
-        labels = kmeans.fit_predict(coords)
+    # Pre-calculate coordinates
+    coords = [START_DEPOT] + target_bins
+    
+    # Extract latitudes and longitudes
+    lats = np.array([c.get("latitude", c.get("lat")) for c in coords])
+    lons = np.array([c.get("longitude", c.get("lon")) for c in coords])
+    
+    # 2. Build Distance/Cost Matrix (Vectorized)
+    COST_MULTIPLIER = 1000
+    
+    lat1 = np.radians(lats[:, np.newaxis])
+    lon1 = np.radians(lons[:, np.newaxis])
+    lat2 = np.radians(lats[np.newaxis, :])
+    lon2 = np.radians(lons[np.newaxis, :])
+    
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat / 2.0)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0)**2
+    c = 2.0 * np.arcsin(np.sqrt(a))
+    dist_matrix_km = 6371.0 * c
+    
+    # Initialize the full distance matrix
+    distance_matrix = np.zeros((num_nodes, num_nodes), dtype=int)
+    
+    # Assign costs between Depot and Bins
+    edge_costs = dist_matrix_km * FUEL_COST_PER_KM * COST_MULTIPLIER
+    distance_matrix[:num_bins + 1, :num_bins + 1] = edge_costs.astype(int)
+    
+    # Clear diagonal
+    np.fill_diagonal(distance_matrix, 0)
+    
+    # Connect bins to the Dummy End Node
+    end_lats = np.array([ef["lat"] for ef in END_FACILITIES])
+    end_lons = np.array([ef["lon"] for ef in END_FACILITIES])
+    
+    # Compute distances from each node (0 to num_bins) to all end facilities
+    node_lat_rad = np.radians(lats[:, np.newaxis])
+    node_lon_rad = np.radians(lons[:, np.newaxis])
+    end_lat_rad = np.radians(end_lats[np.newaxis, :])
+    end_lon_rad = np.radians(end_lons[np.newaxis, :])
+    
+    dlat_end = end_lat_rad - node_lat_rad
+    dlon_end = end_lon_rad - node_lon_rad
+    a_end = np.sin(dlat_end / 2.0)**2 + np.cos(node_lat_rad) * np.cos(end_lat_rad) * np.sin(dlon_end / 2.0)**2
+    c_end = 2.0 * np.arcsin(np.sqrt(a_end))
+    dist_to_ends_km = 6371.0 * c_end
+    
+    # Min distance to any end facility for each node
+    min_dist_to_end = np.min(dist_to_ends_km, axis=1)
+    
+    # Only bins (1 to num_bins) connect to dummy end node
+    distance_matrix[1:num_bins + 1, dummy_end_index] = (min_dist_to_end[1:] * FUEL_COST_PER_KM * COST_MULTIPLIER).astype(int)
+    
+    # The Dummy End Node is a sink; leaving it costs 0
+    distance_matrix[dummy_end_index, :] = 0
+
+    # 3. Build Demands Array
+    demands = [0] * num_nodes
+    for i, b in enumerate(target_bins, start=1):
+        volume = (b.get("fill_percentage", 0) / 100.0) * b.get("capacity", 100.0)
+        demands[i] = int(volume * 10)  # Scale by 10 for integer precision
         
-        clusters = {i: [] for i in range(num_vans)}
-        for i, label in enumerate(labels):
-            clusters[label].append(target_bins[i])
-            
-        # Capacity Rebalancing
-        overloaded = True
-        iterations = 0
-        while overloaded and iterations < 100:
-            overloaded = False
-            iterations += 1
-            for c_id, bins_list in clusters.items():
-                c_vol = sum((b.get("fill_percentage", 0)/100.0)*b.get("capacity", 100.0) for b in bins_list)
-                if c_vol > VAN_CAPACITY_LITERS:
-                    overloaded = True
-                    underloaded = []
-                    for uc_id, ubins_list in list(clusters.items()):
-                        if uc_id != c_id:
-                            uc_vol = sum((b.get("fill_percentage", 0)/100.0)*b.get("capacity", 100.0) for b in ubins_list)
-                            if uc_vol < VAN_CAPACITY_LITERS:
-                                underloaded.append((uc_id, VAN_CAPACITY_LITERS - uc_vol))
-                    
-                    if not underloaded:
-                        new_c_id = len(clusters)
-                        clusters[new_c_id] = []
-                        underloaded.append((new_c_id, VAN_CAPACITY_LITERS))
-                        num_vans += 1
-                        
-                    bin_to_move = bins_list.pop()
-                    best_uc = underloaded[0][0]
-                    clusters[best_uc].append(bin_to_move)
-                    break 
-                    
-    # 2. VRP Routing and Fuel Calculation
+    scaled_van_capacity = int(VAN_MAX_CAPACITY * 10)
+    
+    # Max vehicles we could possibly use
+    num_vehicles = num_bins
+
+    # 4. Initialize OR-Tools Routing Model
+    manager = pywrapcp.RoutingIndexManager(num_nodes, num_vehicles, [depot_index] * num_vehicles, [dummy_end_index] * num_vehicles)
+    routing = pywrapcp.RoutingModel(manager)
+
+    # Register transit callback for Cost
+    def distance_callback(from_index, to_index):
+        from_node = manager.IndexToNode(from_index)
+        to_node = manager.IndexToNode(to_index)
+        return distance_matrix[from_node][to_node]
+
+    transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+    
+    # Multi-Objective: Add a Fixed Dispatch Penalty to heavily penalize using unnecessary vans
+    routing.SetFixedCostOfAllVehicles(int(VAN_DISPATCH_FIXED_COST * COST_MULTIPLIER))
+
+    # Register demand callback for Capacity
+    def demand_callback(from_index):
+        from_node = manager.IndexToNode(from_index)
+        return demands[from_node]
+
+    demand_callback_index = routing.RegisterUnaryTransitCallback(demand_callback)
+    routing.AddDimensionWithVehicleCapacity(
+        demand_callback_index,
+        0,  # null capacity slack
+        [scaled_van_capacity] * num_vehicles,  # vehicle maximum capacities
+        True,  # start cumul to zero
+        'Capacity'
+    )
+
+    # 5. Solve the CVRP
+    search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+    search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+    search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+    search_parameters.time_limit.FromSeconds(3) # Max 3 seconds of solving
+    
+    solution = routing.SolveWithParameters(search_parameters)
+
+    if not solution:
+        logger.error("OR-Tools failed to find a valid CVRP solution.")
+        return {"fleet_routes": [], "fleet_totals": {"total_vans": 0, "total_distance": 0.0, "total_fuel": 0.0, "total_cost": 0.0}, "message": "Routing solver failed."}
+
+    # 6. Parse Solution & Execute Real Routes via OSRM
     fleet_routes = []
     tot_dist = 0.0
     tot_fuel = 0.0
     tot_cost = 0.0
     
+    # Gather all route sequences first
+    route_tasks = []
     van_id = 1
-    for c_id, c_bins in clusters.items():
-        if not c_bins:
+    
+    for vehicle_id in range(num_vehicles):
+        index = routing.Start(vehicle_id)
+        if routing.IsEnd(solution.Value(routing.NextVar(index))):
+            continue  # Empty route
+            
+        route_nodes = []
+        while not routing.IsEnd(index):
+            node_idx = manager.IndexToNode(index)
+            if node_idx != depot_index and node_idx != dummy_end_index:
+                route_nodes.append(target_bins[node_idx - 1])
+            index = solution.Value(routing.NextVar(index))
+            
+        if not route_nodes:
             continue
             
-        c_lat = np.mean([b["latitude"] for b in c_bins])
-        c_lon = np.mean([b["longitude"] for b in c_bins])
-        closest_end = min(END_FACILITIES, key=lambda ef: haversine_distance(c_lat, c_lon, ef["lat"], ef["lon"]))
+        last_bin = route_nodes[-1]
+        lat = last_bin.get("latitude")
+        lon = last_bin.get("longitude")
+        closest_end = min(END_FACILITIES, key=lambda ef: haversine_distance(lat, lon, ef["lat"], ef["lon"]))
         
-        try:
-            route_data = _calculate_osrm_route(c_bins, closest_end)
-        except Exception as e:
-            logger.error(f"OSRM failed for van {van_id}, falling back: {e}")
-            route_data = _calculate_networkx_fallback_route(c_bins, closest_end)
-            
-        dist = route_data["total_distance"]
-        fuel = dist / FUEL_CONSUMPTION_KM_PER_LITER
-        cost = fuel * FUEL_PRICE_PER_LITER
-        
-        fleet_routes.append({
-            "van_id": van_id,
-            "route": route_data["route"],
-            "details": route_data["details"],
-            "distance_km": round(dist, 2),
-            "fuel_liters": round(fuel, 2),
-            "cost_inr": round(cost, 2),
-            "roadGeometry": route_data["roadGeometry"]
-        })
-        
-        tot_dist += dist
-        tot_fuel += fuel
-        tot_cost += cost
+        route_tasks.append((van_id, route_nodes, closest_end))
         van_id += 1
+
+    # Fetch OSRM geometry concurrently
+    def fetch_route_data(task):
+        vid, r_nodes, cend = task
+        try:
+            r_data = _calculate_osrm_route(r_nodes, cend)
+        except Exception as e:
+            logger.error(f"OSRM failed for van {vid}, falling back: {e}")
+            r_data = _calculate_networkx_fallback_route(r_nodes, cend)
+        return vid, r_nodes, cend, r_data
+
+    fleet_routes = []
+    tot_dist = 0.0
+    tot_fuel = 0.0
+    tot_cost = 0.0
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, len(route_tasks) if route_tasks else 1)) as executor:
+        future_to_task = {executor.submit(fetch_route_data, task): task for task in route_tasks}
+        
+        for future in concurrent.futures.as_completed(future_to_task):
+            vid, r_nodes, cend, route_data = future.result()
+            
+            dist = route_data["total_distance"]
+            fuel = dist / FUEL_CONSUMPTION_KM_PER_LITER
+            cost = (fuel * FUEL_PRICE_PER_LITER) + VAN_DISPATCH_FIXED_COST
+            total_volume = sum((b.get("fill_percentage", 0) / 100.0) * b.get("capacity", 100.0) for b in r_nodes)
+            
+            fleet_routes.append({
+                "van_id": vid,
+                "route": route_data["route"],
+                "details": route_data["details"],
+                "distance_km": round(dist, 2),
+                "fuel_liters": round(fuel, 2),
+                "cost_inr": round(cost, 2),
+                "total_volume": round(total_volume, 2),
+                "roadGeometry": route_data["roadGeometry"]
+            })
+            
+            tot_dist += dist
+            tot_fuel += fuel
+            tot_cost += cost
+
+    # Ensure fleet_routes are ordered by van_id for consistency
+    fleet_routes.sort(key=lambda x: x["van_id"])
         
     return {
         "fleet_routes": fleet_routes,
@@ -284,5 +403,5 @@ def calculate_optimal_route() -> Dict[str, Any]:
             "total_fuel": round(tot_fuel, 2),
             "total_cost": round(tot_cost, 2)
         },
-        "message": f"Successfully planned {len(fleet_routes)} van routes for {len(target_bins)} bins."
+        "message": f"Successfully planned {len(fleet_routes)} CVRP van routes optimizing capacity & dispatch cost."
     }

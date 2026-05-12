@@ -3,8 +3,8 @@ import Sidebar from './Sidebar';
 import AnalyticsCards from './AnalyticsCards';
 import MapView from './MapView';
 import RoutePanel from './RoutePanel';
-import { fetchBins, fetchBinHistory, seedBins } from '../services/api';
-import { Sparkles, X, Activity, Server } from 'lucide-react';
+import { fetchBins, fetchBinHistory, seedBins, randomizeBins, fetchOptimalRoute } from '../services/api';
+import { Sparkles, X, Activity, Server, Dices, Filter } from 'lucide-react';
 import AIChatWidget from './AIChatWidget';
 
 function AdminDashboard() {
@@ -16,6 +16,8 @@ function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isConnected, setIsConnected] = useState(true);
   const [seeding, setSeeding] = useState(false);
+  const [randomizing, setRandomizing] = useState(false);
+  const [selectedVan, setSelectedVan] = useState('ALL');
 
   // Background polling interval checking /api/bins status every 5 seconds
   useEffect(() => {
@@ -72,6 +74,23 @@ function AdminDashboard() {
     }
   };
 
+  const handleRandomizeData = async () => {
+    setRandomizing(true);
+    try {
+      await randomizeBins();
+      const newBins = await fetchBins();
+      setBins(newBins);
+      // Recalculate routes immediately to reflect new state
+      const newRoute = await fetchOptimalRoute();
+      setOptimalRoute(newRoute);
+      setSelectedVan('ALL'); // Reset filter
+    } catch (err) {
+      console.error("Error randomizing data:", err);
+    } finally {
+      setRandomizing(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-[#0b0f19] text-slate-100 selection:bg-cyan-500 selection:text-slate-950">
       {/* Decoupled Side Navigation Layout */}
@@ -106,9 +125,39 @@ function AdminDashboard() {
         {activeTab === 'dashboard' && (
           <div className="space-y-6 animate-fade-in">
             {/* Header branding block */}
-            <div className="text-left mb-2">
-              <h1 className="text-2xl font-black text-white tracking-tight">Fleet Real-Time Core</h1>
-              <p className="text-xs text-slate-400 mt-0.5">Automated telemetry streams mapping continuous live ESP32 status updates</p>
+            <div className="text-left mb-2 flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-black text-white tracking-tight">Fleet Real-Time Core</h1>
+                <p className="text-xs text-slate-400 mt-0.5">Automated telemetry streams mapping continuous live ESP32 status updates</p>
+              </div>
+              
+              {/* Top Control Bar */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-1.5 glass-card">
+                  <Filter className="w-4 h-4 text-slate-400" />
+                  <select 
+                    value={selectedVan} 
+                    onChange={(e) => setSelectedVan(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-slate-200 outline-none cursor-pointer focus:ring-0 min-w-[120px]"
+                  >
+                    <option value="ALL" className="bg-slate-900 text-white">Show All Fleet</option>
+                    {optimalRoute?.fleet_routes?.map((route) => (
+                      <option key={route.van_id} value={route.van_id.toString()} className="bg-slate-900 text-white">
+                        Van {route.van_id} Route
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <button 
+                  onClick={handleRandomizeData}
+                  disabled={randomizing}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-200 font-bold text-xs rounded-xl transition-all shadow-lg flex items-center gap-2 cursor-pointer active:scale-95 whitespace-nowrap"
+                >
+                  <Dices className={`w-4 h-4 text-amber-400 ${randomizing ? 'animate-spin' : ''}`} />
+                  {randomizing ? 'Simulating...' : 'Randomize Fill Levels'}
+                </button>
+              </div>
             </div>
 
             {/* Status Analytics summary layers */}
@@ -117,7 +166,7 @@ function AdminDashboard() {
             {/* Split workspace view layout: Left canvas for Maps, Right panel for route management */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
-                <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} />
+                <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} />
               </div>
               <div className="lg:col-span-1 flex flex-col gap-6">
                 <RoutePanel optimalRoute={optimalRoute} setOptimalRoute={setOptimalRoute} bins={bins} />
@@ -159,7 +208,7 @@ function AdminDashboard() {
               <h2 className="text-xl font-bold text-white">Expanded Cartography Matrix</h2>
               <p className="text-xs text-slate-400">Click container markers to analyze volume properties and active priority rules</p>
             </div>
-            <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} />
+            <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} />
           </div>
         )}
 

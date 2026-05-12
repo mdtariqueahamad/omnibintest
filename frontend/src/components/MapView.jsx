@@ -45,14 +45,16 @@ const AnimatedVehicle = ({ roadGeometry }) => {
 };
 
 // Dynamic auto-bounds updater adjusting viewports perfectly around valid generated itineraries
-const BoundsUpdater = ({ optimalRoute }) => {
+const BoundsUpdater = ({ optimalRoute, selectedVan }) => {
   const map = useMap();
 
   useEffect(() => {
     if (optimalRoute?.fleet_routes && optimalRoute.fleet_routes.length > 0) {
       const allCoords = [];
       optimalRoute.fleet_routes.forEach(r => {
-        if (r.roadGeometry) allCoords.push(...r.roadGeometry);
+        if (selectedVan === 'ALL' || r.van_id.toString() === selectedVan) {
+          if (r.roadGeometry) allCoords.push(...r.roadGeometry);
+        }
       });
       if (allCoords.length > 1) {
         map.fitBounds(allCoords, { padding: [40, 40], maxZoom: 15 });
@@ -119,7 +121,7 @@ const getCustomIcon = (fillPercentage) => {
   });
 };
 
-const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
+const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL' }) => {
   // Center map focused around localized Bhopal coordinates initially
   const centerPosition = [23.2360, 77.4700];
 
@@ -144,6 +146,8 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
     if (!optimalRoute?.fleet_routes) return allSegments;
 
     optimalRoute.fleet_routes.forEach((fleetRoute) => {
+      if (selectedVan !== 'ALL' && fleetRoute.van_id.toString() !== selectedVan) return;
+
       if (fleetRoute.roadGeometry && fleetRoute.roadGeometry.length > 1) {
         allSegments.push({
           positions: fleetRoute.roadGeometry,
@@ -153,7 +157,7 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
       }
     });
     return allSegments;
-  }, [optimalRoute?.fleet_routes]);
+  }, [optimalRoute?.fleet_routes, selectedVan]);
 
   // Straight line segments fallback logic mapping active nodes
   const polylinePositions = useMemo(() => {
@@ -161,6 +165,8 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
 
     let allLines = [];
     optimalRoute.fleet_routes.forEach((fleetRoute) => {
+      if (selectedVan !== 'ALL' && fleetRoute.van_id.toString() !== selectedVan) return;
+
       const positions = fleetRoute.route.map((id) => {
         if (id === 'depot') return [23.2244, 77.4027];
         if (id === 'dump_east') return [23.2524, 77.5404];
@@ -178,7 +184,7 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
       }
     });
     return allLines;
-  }, [optimalRoute?.fleet_routes, bins]);
+  }, [optimalRoute?.fleet_routes, bins, selectedVan]);
 
   return (
     <div className="w-full h-[520px] rounded-2xl overflow-hidden glass-panel border border-slate-800 relative z-10 shadow-2xl">
@@ -188,7 +194,7 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
         scrollWheelZoom={true}
         style={{ width: '100%', height: '100%', background: '#0b0f19' }}
       >
-        <BoundsUpdater optimalRoute={optimalRoute} />
+        <BoundsUpdater optimalRoute={optimalRoute} selectedVan={selectedVan} />
 
         {/* Dark mode tiles */}
         <TileLayer
@@ -208,6 +214,7 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
 
         {/* Dynamic Ending Dump Site Markers Extracted from Final Route Coordinates */}
         {optimalRoute?.fleet_routes && optimalRoute.fleet_routes.map((route, idx) => {
+          if (selectedVan !== 'ALL' && route.van_id.toString() !== selectedVan) return null;
           if (!route.roadGeometry || route.roadGeometry.length === 0) return null;
           const finalCoord = route.roadGeometry[route.roadGeometry.length - 1];
           return (
@@ -292,11 +299,12 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
               />
             ))}
             {/* Animated Vehicle Markers (One per van) */}
-            {optimalRoute.fleet_routes.map(r => (
-              r.roadGeometry && r.roadGeometry.length > 1 && (
-                <AnimatedVehicle key={`van-${r.van_id}`} roadGeometry={r.roadGeometry} />
-              )
-            ))}
+            {optimalRoute.fleet_routes.map(r => {
+               if (selectedVan !== 'ALL' && r.van_id.toString() !== selectedVan) return null;
+               return r.roadGeometry && r.roadGeometry.length > 1 && (
+                  <AnimatedVehicle key={`van-${r.van_id}`} roadGeometry={r.roadGeometry} />
+               );
+            })}
           </>
         ) : polylinePositions.length > 0 && (
           <>

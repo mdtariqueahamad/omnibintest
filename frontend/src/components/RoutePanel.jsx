@@ -111,7 +111,8 @@ const RoutePanel = ({ optimalRoute, setOptimalRoute, bins = [] }) => {
                          <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs">{vanRoute.van_id}</span>
                          Van Alpha-{vanRoute.van_id}
                        </span>
-                       <span className="text-[10px] text-slate-400">
+                       <span className="text-[10px] text-slate-400 text-right">
+                         <span className="text-emerald-400 font-bold">{vanRoute.total_volume}L Load</span><br/>
                          {vanRoute.distance_km}km | {vanRoute.fuel_liters}L | ₹{vanRoute.cost_inr}
                        </span>
                     </div>

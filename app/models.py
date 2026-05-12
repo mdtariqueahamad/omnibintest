@@ -47,6 +47,7 @@ class FleetRoute(BaseModel):
     distance_km: float
     fuel_liters: float
     cost_inr: float
+    total_volume: float
     roadGeometry: Optional[List[List[float]]] = None
 
 

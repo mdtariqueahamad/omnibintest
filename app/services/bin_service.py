@@ -461,3 +461,31 @@ def seed_initial_bins() -> List[Dict[str, Any]]:
         seeded.append(b)
 
     return [_serialize(b) for b in seeded]
+
+import random
+
+def randomize_all_bins() -> None:
+    """Randomize the fill levels of all bins to simulate live activity."""
+    all_bins = list(bins_collection.find({}))
+    timestamp = datetime.now(timezone.utc).isoformat()
+    
+    for b in all_bins:
+        new_fill = round(random.uniform(10.0, 100.0), 1)
+        
+        if new_fill >= 90.0:
+            status = "Critical"
+        elif new_fill >= 70.0:
+            status = "Needs Collection"
+        else:
+            status = "OK"
+            
+        bins_collection.update_one(
+            {"_id": b["_id"]},
+            {"$set": {"fill_percentage": new_fill, "status": status, "last_updated": timestamp}}
+        )
+        
+        history_collection.insert_one({
+            "bin_id": b["bin_id"],
+            "timestamp": timestamp,
+            "fill_percentage": new_fill
+        })

@@ -50,6 +50,16 @@ export const seedBins = async () => {
   }
 };
 
+export const randomizeBins = async () => {
+  try {
+    const response = await apiClient.post('/api/bins/randomize');
+    return response.data;
+  } catch (error) {
+    console.error("Error randomizing bins:", error);
+    throw error;
+  }
+};
+
 // Query the free public Open Source Routing Machine (OSRM) API for real street geometry
 export const fetchOsrmRoute = async (coordString) => {
   try {
