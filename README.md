@@ -106,3 +106,32 @@ mosquitto_pub -h localhost -p 1883 -t "omnibin/bins/fill_level" -m '{"bin_id": "
 ```
 
 Watch the terminal running `mqtt_listener.py` to observe real-time status adjustments, status triggers (e.g., transition to `Needs Collection` or `Critical`), and continuous background history saving.
+
+---
+
+## 💻 React Web Frontend Dashboard (Phase 2)
+
+A fully responsive, premium enterprise React web dashboard built with **Vite** and **Tailwind CSS** is provided inside the `frontend` subfolder.
+
+### Frontend Features:
+- **Live Interactive Map Canvas**: Custom markers utilizing **React-Leaflet** complete with auto-updating conditional status classes (Green for $<50\%$, Yellow for $50\%-80\%$, Red/Pulsing for $>80\%$ / Critical state).
+- **Polyline Route Overlay**: Maps exact continuous node trajectories returned by the NetworkX TSP optimization microservice.
+- **Real-Time Automated Synchronization**: Employs continuous polling hooks syncing state matrices seamlessly every 5 seconds.
+- **Deep Audit Timelines Modal**: Inspect nodes directly to display rich storage telemetry and historical fill charts dynamically.
+
+### Running the Frontend Local Server:
+1. Navigate to the frontend workspace:
+   ```bash
+   cd frontend
+   ```
+2. Install standard Node packages (if not pre-installed):
+   ```bash
+   npm install
+   ```
+3. Boot the development gateway:
+   ```bash
+   npm run dev
+   ```
+4. Access the fully synchronized live dashboard interface at:
+   👉 **`http://localhost:5173`**
+
