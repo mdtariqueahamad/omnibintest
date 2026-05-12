@@ -53,6 +53,13 @@ def start_mqtt_listener():
     client.on_connect = on_connect
     client.on_message = on_message
 
+    # Enable TLS for secure cloud broker connection (required by HiveMQ Cloud)
+    client.tls_set(tls_version=mqtt.ssl.PROTOCOL_TLS_CLIENT)
+
+    # Authenticate with cloud broker credentials from settings / .env
+    if settings.mqtt_username and settings.mqtt_password:
+        client.username_pw_set(settings.mqtt_username, settings.mqtt_password)
+
     logging.info(f"Attempting connection to MQTT broker {settings.mqtt_broker_host}:{settings.mqtt_broker_port}...")
 
     # Continuous retry loop to handle broker startup delays gracefully

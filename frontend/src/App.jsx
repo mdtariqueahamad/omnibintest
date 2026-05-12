@@ -5,6 +5,7 @@ import MapView from './components/MapView';
 import RoutePanel from './components/RoutePanel';
 import { fetchBins, fetchBinHistory, seedBins } from './services/api';
 import { Sparkles, X, Activity, Server } from 'lucide-react';
+import AIChatWidget from './components/AIChatWidget';
 
 function App() {
   const [bins, setBins] = useState([]);
@@ -274,6 +275,9 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Persistent AI Assistant Widget Overlay */}
+      <AIChatWidget />
     </div>
   );
 }
