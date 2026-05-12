@@ -1,6 +1,48 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
+
+// Animated vehicle marker component to isolate rapid state updates
+const AnimatedVehicle = ({ roadGeometry }) => {
+  const [animatedPositionIndex, setAnimatedPositionIndex] = useState(0);
+
+  useEffect(() => {
+    let intervalId;
+    if (roadGeometry && roadGeometry.length > 0) {
+      intervalId = setInterval(() => {
+        setAnimatedPositionIndex((prev) => {
+          // Increment by a frame step (e.g. 3) to make movement visible and steady over dense coordinates
+          const nextIndex = prev + 3;
+          if (nextIndex >= roadGeometry.length) {
+            return 0; // Loop back to start
+          }
+          return nextIndex;
+        });
+      }, 40); // 40ms interval for smooth animation (~25fps)
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [roadGeometry]);
+
+  const getVehicleIcon = () => L.divIcon({
+    className: 'custom-vehicle-icon',
+    html: `<div class="w-3.5 h-3.5 bg-yellow-400 rounded-full shadow-[0_0_15px_rgba(250,204,21,0.9)] border-2 border-white"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7]
+  });
+
+  if (!roadGeometry || !roadGeometry[animatedPositionIndex]) return null;
+
+  return (
+    <Marker 
+      position={roadGeometry[animatedPositionIndex]} 
+      icon={getVehicleIcon()} 
+      zIndexOffset={1000}
+    />
+  );
+};
 
 // Dynamic auto-bounds updater adjusting viewports perfectly around valid generated itineraries
 const BoundsUpdater = ({ optimalRoute }) => {
@@ -75,15 +117,44 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
   // Center map focused around localized Bhopal coordinates initially
   const centerPosition = [23.2360, 77.4700];
 
-  // Straight line segments fallback logic mapping active nodes
-  const polylinePositions = optimalRoute?.route?.map((id) => {
-    if (id === 'depot') return [23.2244, 77.4027];
-    const target = bins.find((b) => b.bin_id === id);
-    if (target && target.latitude && target.longitude) {
-      return [target.latitude, target.longitude];
+  // Interpolation logic for color gradient
+  const interpolateColor = (factor) => {
+    // Start color: Cyan rgb(6, 182, 212) -> Tailwind cyan-500
+    // End color: Purple rgb(192, 132, 252) -> Tailwind purple-400
+    const r = Math.round(6 + factor * (192 - 6));
+    const g = Math.round(182 + factor * (132 - 182));
+    const b = Math.round(212 + factor * (252 - 212));
+    return `rgb(${r}, ${g}, ${b})`;
+  };
+
+  // Build segments for gradient polyline
+  const routeSegments = useMemo(() => {
+    let segments = [];
+    if (optimalRoute?.roadGeometry && optimalRoute.roadGeometry.length > 1) {
+      const totalPoints = optimalRoute.roadGeometry.length;
+      for (let i = 0; i < totalPoints - 1; i++) {
+        const factor = i / (totalPoints - 1);
+        segments.push({
+          positions: [optimalRoute.roadGeometry[i], optimalRoute.roadGeometry[i + 1]],
+          color: interpolateColor(factor)
+        });
+      }
     }
-    return null;
-  }).filter(Boolean);
+    return segments;
+  }, [optimalRoute?.roadGeometry]);
+
+  // Straight line segments fallback logic mapping active nodes
+  const polylinePositions = useMemo(() => {
+    if (!optimalRoute?.route) return [];
+    return optimalRoute.route.map((id) => {
+      if (id === 'depot') return [23.2244, 77.4027];
+      const target = bins.find((b) => b.bin_id === id);
+      if (target && target.latitude && target.longitude) {
+        return [target.latitude, target.longitude];
+      }
+      return null;
+    }).filter(Boolean);
+  }, [optimalRoute?.route, bins]);
 
   return (
     <div className="w-full h-[520px] rounded-2xl overflow-hidden glass-panel border border-slate-800 relative z-10 shadow-2xl">
@@ -172,18 +243,25 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
           );
         })}
 
-        {/* Calculated OSRM Road-Snapped or Straight-Line TSP Path Overlay */}
-        {optimalRoute?.roadGeometry && optimalRoute.roadGeometry.length > 1 ? (
-          <Polyline 
-            positions={optimalRoute.roadGeometry} 
-            pathOptions={{ 
-              color: '#2563eb', 
-              weight: 6, 
-              opacity: 0.75, 
-              lineCap: 'round',
-              lineJoin: 'round'
-            }} 
-          />
+        {/* Calculated OSRM Road-Snapped Route Overlay (Gradient) */}
+        {routeSegments.length > 0 ? (
+          <>
+            {routeSegments.map((segment, index) => (
+              <Polyline 
+                key={`segment-${index}`}
+                positions={segment.positions} 
+                pathOptions={{ 
+                  color: segment.color, 
+                  weight: 6, 
+                  opacity: 0.85, 
+                  lineCap: 'round',
+                  lineJoin: 'round'
+                }} 
+              />
+            ))}
+            {/* Animated Vehicle Marker */}
+            <AnimatedVehicle roadGeometry={optimalRoute.roadGeometry} />
+          </>
         ) : polylinePositions && polylinePositions.length > 1 && (
           <Polyline 
             positions={polylinePositions} 

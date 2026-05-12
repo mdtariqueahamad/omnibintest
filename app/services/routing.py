@@ -11,6 +11,12 @@ DEPOT_LOCATION = "Bhopal Nagar Nigam Building"
 DEPOT_LAT = 23.2244
 DEPOT_LON = 77.4027
 
+# Fixed coordinates for the Ending Solid Waste Dump Site
+END_ID = "waste_facility"
+END_LOCATION = "Solid Waste Management Facility"
+END_LAT = 23.2524
+END_LON = 77.5404
+
 logger = logging.getLogger(__name__)
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -38,12 +44,17 @@ def _calculate_osrm_route(target_bins: List[Dict[str, Any]]) -> Dict[str, Any]:
             locations.append(f"{b['longitude']},{b['latitude']}")
             node_ids.append(b["bin_id"])
             
+    # Append the END coordinates to strictly end at the Waste Facility
+    locations.append(f"{END_LON},{END_LAT}")
+    node_ids.append(END_ID)
+            
     coords_str = ";".join(locations)
     
     # OSRM Trip API request
     # source=first ensures we start at the depot
-    # roundtrip=true guarantees a closed TSP cycle
-    url = f"http://router.project-osrm.org/trip/v1/driving/{coords_str}?source=first&roundtrip=true&geometries=geojson"
+    # destination=last ensures we end at the waste facility
+    # roundtrip=false guarantees an open path
+    url = f"http://router.project-osrm.org/trip/v1/driving/{coords_str}?source=first&destination=last&roundtrip=false&geometries=geojson"
     
     response = requests.get(url, timeout=15)
     response.raise_for_status()
@@ -69,8 +80,8 @@ def _calculate_osrm_route(target_bins: List[Dict[str, Any]]) -> Dict[str, Any]:
         w_index = wp["waypoint_index"]
         ordered_ids[w_index] = node_ids[idx]
         
-    # Build complete cycle (start and end at depot)
-    tsp_cycle = ordered_ids + [DEPOT_ID]
+    # Build open path (starts at depot, ends at facility)
+    tsp_cycle = ordered_ids
     
     # 4. Build details metadata
     details = []
@@ -78,7 +89,7 @@ def _calculate_osrm_route(target_bins: List[Dict[str, Any]]) -> Dict[str, Any]:
     bin_lookup = {b["bin_id"]: b for b in target_bins}
     
     for b_id in ordered_ids:
-        if b_id == DEPOT_ID:
+        if b_id in (DEPOT_ID, END_ID):
             continue
             
         b_info = bin_lookup[b_id]
@@ -106,6 +117,7 @@ def _calculate_networkx_fallback_route(target_bins: List[Dict[str, Any]]) -> Dic
     """
     G = nx.Graph()
     G.add_node(DEPOT_ID, location=DEPOT_LOCATION, lat=DEPOT_LAT, lon=DEPOT_LON, fill_percentage=0.0, priority=0)
+    G.add_node(END_ID, location=END_LOCATION, lat=END_LAT, lon=END_LON, fill_percentage=0.0, priority=0)
 
     bin_lookup = {}
     for b in target_bins:
@@ -132,7 +144,10 @@ def _calculate_networkx_fallback_route(target_bins: List[Dict[str, Any]]) -> Dic
 
     if tsp_cycle[0] != DEPOT_ID:
         depot_index = tsp_cycle.index(DEPOT_ID)
-        tsp_cycle = tsp_cycle[depot_index:-1] + tsp_cycle[:depot_index] + [DEPOT_ID]
+        tsp_cycle = tsp_cycle[depot_index:-1] + tsp_cycle[:depot_index]
+    else:
+        # Remove loop-back logic
+        tsp_cycle = tsp_cycle[:-1]
 
     total_dist = 0.0
     details = []
@@ -145,7 +160,7 @@ def _calculate_networkx_fallback_route(target_bins: List[Dict[str, Any]]) -> Dic
         edge_data = G.get_edge_data(u, v)
         total_dist += edge_data["weight"]
 
-        if v != DEPOT_ID and v not in visited_bins:
+        if v not in (DEPOT_ID, END_ID) and v not in visited_bins:
             visited_bins.add(v)
             b_info = bin_lookup[v]
             details.append({
