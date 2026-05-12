@@ -95,28 +95,28 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
       >
         <BoundsUpdater optimalRoute={optimalRoute} />
 
-        {/* Beautiful high-contrast clean tiles optimal for dark background dashboards */}
+        {/* Dark mode tiles */}
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
 
         {/* Permanent Starting Depot Marker: Bhopal Nagar Nigam Building */}
         <Marker position={[23.2244, 77.4027]} icon={getStartIcon()}>
-          <Popup>
-            <div className="p-1 text-slate-900 font-sans text-left">
-              <p className="font-bold text-xs text-slate-900">Bhopal Nagar Nigam Building</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">Municipal Corporation Headquarters &amp; Starting Dispatch Depot</p>
+          <Popup className="rounded-xl bg-slate-900 text-slate-200 border-none">
+            <div className="p-1 text-slate-200 font-sans text-left">
+              <p className="font-bold text-xs text-white">Bhopal Nagar Nigam Building</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Municipal Corporation Headquarters &amp; Starting Dispatch Depot</p>
             </div>
           </Popup>
         </Marker>
 
         {/* Permanent Ending Dump Site Marker: Solid Waste Management Facility */}
         <Marker position={[23.2524, 77.5404]} icon={getEndIcon()}>
-          <Popup>
-            <div className="p-1 text-slate-900 font-sans text-left">
-              <p className="font-bold text-xs text-slate-900">Solid Waste Management Facility</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">Terminal dumping &amp; sorting grounds for dispatch fleet</p>
+          <Popup className="rounded-xl bg-slate-900 text-slate-200 border-none">
+            <div className="p-1 text-slate-200 font-sans text-left">
+              <p className="font-bold text-xs text-white">Solid Waste Management Facility</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Terminal dumping &amp; sorting grounds for dispatch fleet</p>
             </div>
           </Popup>
         </Marker>
@@ -136,31 +136,31 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
                 click: () => setSelectedBin(bin),
               }}
             >
-              <Popup>
-                <div className="p-1 text-slate-900 font-sans text-left min-w-[150px]">
-                  <p className="font-bold text-xs border-b border-slate-100 pb-1 mb-1.5 flex items-center justify-between gap-2">
-                    <span className="truncate">{bin.location}</span>
-                    <span className="text-[8px] uppercase px-1 py-0.2 rounded bg-slate-100 text-slate-600 font-mono shrink-0">
+              <Popup className="rounded-2xl shadow-xl border-0 overflow-hidden custom-popup bg-slate-900">
+                <div className="p-1 text-slate-200 font-sans text-left min-w-[150px]">
+                  <p className="font-bold text-xs border-b border-slate-700 pb-1 mb-1.5 flex items-center justify-between gap-2">
+                    <span className="truncate text-white">{bin.location}</span>
+                    <span className="text-[8px] uppercase px-1 py-0.2 rounded bg-slate-800 text-slate-400 font-mono shrink-0">
                       {bin.bin_id}
                     </span>
                   </p>
                   <div className="space-y-1 text-[11px]">
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Current Load:</span>
-                      <span className="font-bold text-slate-900">{bin.fill_percentage}%</span>
+                      <span className="text-slate-400">Current Load:</span>
+                      <span className="font-bold text-white">{bin.fill_percentage}%</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Max Capacity:</span>
-                      <span className="font-medium text-slate-700">{bin.capacity}L</span>
+                      <span className="text-slate-400">Max Capacity:</span>
+                      <span className="font-medium text-slate-300">{bin.capacity}L</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Priority Tier:</span>
-                      <span className="font-medium text-slate-700">Level {bin.priority}</span>
+                      <span className="text-slate-400">Priority Tier:</span>
+                      <span className="font-medium text-slate-300">Level {bin.priority}</span>
                     </div>
-                    <div className="flex justify-between items-center pt-1.5 mt-1.5 border-t border-slate-100">
-                      <span className="text-slate-500">Sensor State:</span>
+                    <div className="flex justify-between items-center pt-1.5 mt-1.5 border-t border-slate-700">
+                      <span className="text-slate-400">Sensor State:</span>
                       <span className={`font-bold text-[10px] ${
-                        bin.status === 'Critical' ? 'text-rose-600 animate-pulse' : bin.status === 'Needs Collection' ? 'text-amber-600' : 'text-emerald-600'
+                        bin.status === 'Critical' ? 'text-rose-500 animate-pulse' : bin.status === 'Needs Collection' ? 'text-amber-500' : 'text-emerald-500'
                       }`}>
                         {bin.status}
                       </span>
