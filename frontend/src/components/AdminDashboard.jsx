@@ -3,9 +3,10 @@ import Sidebar from './Sidebar';
 import AnalyticsCards from './AnalyticsCards';
 import MapView from './MapView';
 import RoutePanel from './RoutePanel';
-import { fetchBins, fetchBinHistory, seedBins, randomizeBins, fetchOptimalRoute } from '../services/api';
-import { Sparkles, X, Activity, Server, Dices, Filter } from 'lucide-react';
+import { fetchBins, fetchBinHistory, seedBins, randomizeBins, fetchOptimalRoute, fetchConfig } from '../services/api';
+import { Sparkles, X, Activity, Server, Dices, Filter, Settings } from 'lucide-react';
 import AIChatWidget from './AIChatWidget';
+import FleetConfigModal from './FleetConfigModal';
 
 function AdminDashboard() {
   const [bins, setBins] = useState([]);
@@ -18,6 +19,8 @@ function AdminDashboard() {
   const [seeding, setSeeding] = useState(false);
   const [randomizing, setRandomizing] = useState(false);
   const [selectedVan, setSelectedVan] = useState('ALL');
+  const [config, setConfig] = useState(null);
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
 
   // Background polling interval checking /api/bins status every 5 seconds
   useEffect(() => {
@@ -33,6 +36,9 @@ function AdminDashboard() {
 
     // Execute first instant call
     loadBinsData();
+
+    // Fetch dynamic fleet configuration
+    fetchConfig().then(setConfig).catch(console.error);
 
     // Trigger interval loop
     const interval = setInterval(loadBinsData, 5000);
@@ -88,6 +94,17 @@ function AdminDashboard() {
       console.error("Error randomizing data:", err);
     } finally {
       setRandomizing(false);
+    }
+  };
+
+  const handleConfigSaved = async () => {
+    try {
+      // Recalculate routes immediately using new configuration constraints
+      const newRoute = await fetchOptimalRoute();
+      setOptimalRoute(newRoute);
+      setSelectedVan('ALL');
+    } catch (err) {
+      console.error("Error refreshing routes post-config save:", err);
     }
   };
 
@@ -156,6 +173,14 @@ function AdminDashboard() {
                 >
                   <Dices className={`w-4 h-4 text-amber-400 ${randomizing ? 'animate-spin' : ''}`} />
                   {randomizing ? 'Simulating...' : 'Randomize Fill Levels'}
+                </button>
+
+                <button
+                  onClick={() => setIsConfigModalOpen(true)}
+                  className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white rounded-xl transition-all shadow-lg cursor-pointer active:scale-95"
+                  title="Dynamic Fleet Configuration"
+                >
+                  <Settings className="w-4 h-4 text-cyan-400 hover:rotate-45 transition-transform duration-300" />
                 </button>
               </div>
             </div>
@@ -327,6 +352,15 @@ function AdminDashboard() {
 
       {/* Persistent AI Assistant Widget Overlay */}
       <AIChatWidget />
+
+      {/* Dynamic Settings Configuration Drawer Modal overlay */}
+      <FleetConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        config={config}
+        setConfig={setConfig}
+        onSaveSuccess={handleConfigSaved}
+      />
     </div>
   );
 }

@@ -1,9 +1,21 @@
 from typing import List
 from fastapi import APIRouter, HTTPException, status
-from app.models import BinCreate, BinResponse, BinHistoryResponse, RouteResponse
-from app.services import bin_service, routing
+from app.models import BinCreate, BinResponse, BinHistoryResponse, RouteResponse, FleetConfig
+from app.services import bin_service, routing, config_service
 
 router = APIRouter(tags=["Waste Management"])
+
+
+@router.get("/api/config", response_model=FleetConfig)
+def get_config():
+    """Retrieve dynamic fleet constraints and global cost weights."""
+    return config_service.get_fleet_config()
+
+
+@router.put("/api/config", response_model=FleetConfig)
+def update_config(config_data: FleetConfig):
+    """Update dynamic fleet constraints on the fly."""
+    return config_service.update_fleet_config(config_data)
 
 
 @router.get("/api/bins", response_model=List[BinResponse])

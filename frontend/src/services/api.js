@@ -60,6 +60,26 @@ export const randomizeBins = async () => {
   }
 };
 
+export const fetchConfig = async () => {
+  try {
+    const response = await apiClient.get('/api/config');
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching fleet configuration:", error);
+    throw error;
+  }
+};
+
+export const updateConfig = async (configData) => {
+  try {
+    const response = await apiClient.put('/api/config', configData);
+    return response.data;
+  } catch (error) {
+    console.error("Error updating fleet configuration:", error);
+    throw error;
+  }
+};
+
 // Query the free public Open Source Routing Machine (OSRM) API for real street geometry
 export const fetchOsrmRoute = async (coordString) => {
   try {

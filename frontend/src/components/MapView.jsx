@@ -96,7 +96,7 @@ const getEndIcon = () => {
 };
 
 // Generate dynamic custom colored HTML markers matching fill status thresholds
-const getCustomIcon = (fillPercentage) => {
+const getCustomIcon = (fillPercentage, isDimmed = false) => {
   let colorClass = 'bg-emerald-500 shadow-emerald-500/40';
   let pulseClass = 'bg-emerald-400';
 
@@ -108,11 +108,15 @@ const getCustomIcon = (fillPercentage) => {
     pulseClass = 'bg-amber-400';
   }
 
+  if (isDimmed) {
+    colorClass = 'bg-slate-700 shadow-none border-slate-600';
+  }
+
   return L.divIcon({
     className: 'custom-div-icon',
     html: `<div class="relative flex items-center justify-center">
-             <span class="absolute inline-flex h-5 w-5 rounded-full ${pulseClass} opacity-50 animate-ping"></span>
-             <div class="w-4 h-4 ${colorClass} border-[1.5px] border-white rounded-full shadow-md flex items-center justify-center">
+             ${!isDimmed ? `<span class="absolute inline-flex h-5 w-5 rounded-full ${pulseClass} opacity-50 animate-ping"></span>` : ''}
+             <div class="w-4 h-4 ${colorClass} ${!isDimmed ? 'border-[1.5px] border-white' : 'border'} rounded-full shadow-md flex items-center justify-center">
                <span class="sr-only">${fillPercentage}%</span>
              </div>
            </div>`,
@@ -186,6 +190,16 @@ const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL' }) =>
     return allLines;
   }, [optimalRoute?.fleet_routes, bins, selectedVan]);
 
+  // Determine active bins Set for Focus + Context highlighting
+  const activeBinIds = useMemo(() => {
+    if (selectedVan === 'ALL' || !optimalRoute?.fleet_routes) {
+      return null; // null represents all active
+    }
+    const targetRoute = optimalRoute.fleet_routes.find(r => r.van_id.toString() === selectedVan);
+    if (!targetRoute?.route) return new Set();
+    return new Set(targetRoute.route);
+  }, [optimalRoute?.fleet_routes, selectedVan]);
+
   return (
     <div className="w-full h-[520px] rounded-2xl overflow-hidden glass-panel border border-slate-800 relative z-10 shadow-2xl">
       <MapContainer
@@ -238,11 +252,13 @@ const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL' }) =>
           const lng = bin.longitude;
           if (!lat || !lng) return null;
 
+          const isDimmed = activeBinIds !== null && !activeBinIds.has(bin.bin_id);
+
           return (
             <Marker
               key={bin.bin_id}
               position={[lat, lng]}
-              icon={getCustomIcon(bin.fill_percentage || 0)}
+              icon={getCustomIcon(bin.fill_percentage || 0, isDimmed)}
               eventHandlers={{
                 click: () => setSelectedBin(bin),
               }}

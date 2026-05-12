@@ -8,6 +8,7 @@ db = client[settings.mongodb_db_name]
 # Expose collections
 bins_collection = db["bins"]
 history_collection = db["bin_history"]
+config_collection = db["fleet_config"]
 
 
 def init_db_indexes():

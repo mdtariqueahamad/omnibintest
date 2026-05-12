@@ -62,3 +62,9 @@ class RouteResponse(BaseModel):
     fleet_routes: List[FleetRoute]
     fleet_totals: FleetTotals
     message: str
+
+
+class FleetConfig(BaseModel):
+    van_capacity: float = Field(500.0, description="Max load capacity per van in liters")
+    mileage_kmpl: float = Field(5.5, description="Average fuel consumption mileage in km/L")
+    fuel_price: float = Field(95.0, description="Fuel cost per liter in INR")

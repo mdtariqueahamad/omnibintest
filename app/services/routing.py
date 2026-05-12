@@ -6,6 +6,7 @@ import requests
 import logging
 import concurrent.futures
 from app.services.bin_service import get_all_bins
+from app.services import config_service
 
 # Import OR-Tools for advanced CVRP multi-objective solving
 from ortools.constraint_solver import routing_enums_pb2
@@ -14,16 +15,34 @@ from ortools.constraint_solver import pywrapcp
 logger = logging.getLogger(__name__)
 
 # Configuration Constants
-VAN_MAX_CAPACITY = 500.0  # Liters
-FUEL_CONSUMPTION_KM_PER_LITER = 5.5
-FUEL_PRICE_PER_LITER = 95.0
-FUEL_COST_PER_KM = FUEL_PRICE_PER_LITER / FUEL_CONSUMPTION_KM_PER_LITER  # ~17.27 INR/km
 VAN_DISPATCH_FIXED_COST = 500.0  # Flat synthetic penalty to force solver to minimize van usage
 
-START_DEPOT = {"lat": 23.2244, "lon": 77.4027, "id": "depot", "location": "Bhopal Nagar Nigam Building"}
+START_DEPOT = {
+    "lat": 23.2335, 
+    "lon": 77.4367, 
+    "id": "depot_isbt", 
+    "location": "Bhopal Municipal Corporation (BMC) Head Office - ISBT Campus"
+}
+
 END_FACILITIES = [
-    {"lat": 23.2524, "lon": 77.5404, "id": "dump_east", "location": "Solid Waste Management Facility (East)"},
-    {"lat": 23.2800, "lon": 77.4000, "id": "dump_north", "location": "Solid Waste Management Facility (North)"}
+    {
+        "lat": 23.2514, 
+        "lon": 77.5448, 
+        "id": "dump_adampur", 
+        "location": "Adampur Chhawani Solid Waste Management Plant (Active Main Landfill & Bio-CNG Plant)"
+    },
+    {
+        "lat": 23.2974, 
+        "lon": 77.4248, 
+        "id": "dump_bhanpur", 
+        "location": "Bhanpur Trenching Ground (Reclaimed Dumpsite / Eco-Park)"
+    },
+    {
+        "lat": 23.1856, 
+        "lon": 77.4376, 
+        "id": "gts_danapani", 
+        "location": "Danapani Garbage Transfer Station (GTS)"
+    }
 ]
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -173,6 +192,13 @@ def _calculate_networkx_fallback_route(target_bins: List[Dict[str, Any]], end_fa
 
 
 def calculate_optimal_route() -> Dict[str, Any]:
+    # Fetch dynamic routing constraints from DB
+    config = config_service.get_fleet_config()
+    van_capacity = float(config.get("van_capacity", 500.0))
+    mileage_kmpl = float(config.get("mileage_kmpl", 5.5))
+    fuel_price = float(config.get("fuel_price", 95.0))
+    fuel_cost_per_km = fuel_price / mileage_kmpl if mileage_kmpl > 0 else 0.0
+
     all_bins = get_all_bins()
 
     target_bins = []
@@ -202,15 +228,35 @@ def calculate_optimal_route() -> Dict[str, Any]:
     # 1. Prepare Nodes for OR-Tools
     # Node 0: Depot
     # Node 1 to N: Target Bins
-    # Node N+1: Dummy End Node representing the closest Dump Site
+    # Node N+1 to N+M: Intermediate Dummy Disposal Nodes
+    # Node N+M+1: Final Dummy End Node representing termination closest dump site
     
     num_bins = len(target_bins)
-    num_nodes = num_bins + 2
+    
+    # Dynamically inject 2 intermediate disposal nodes per physical endpoint facility
+    dummy_dump_nodes = []
+    dummy_count = 1
+    for ef in END_FACILITIES:
+        for _ in range(2):
+            dummy_dump_nodes.append({
+                "bin_id": f"dump_mid_{ef['id']}_{dummy_count}",
+                "location": f"{ef['location']} (Intermediate Disposal)",
+                "latitude": ef["lat"],
+                "longitude": ef["lon"],
+                "fill_percentage": 0.0,
+                "capacity": 0.0,
+                "priority": 0,
+                "is_dump_site": True
+            })
+            dummy_count += 1
+            
+    num_dummy_dumps = len(dummy_dump_nodes)
+    num_nodes = num_bins + num_dummy_dumps + 2
     depot_index = 0
     dummy_end_index = num_nodes - 1
     
-    # Pre-calculate coordinates
-    coords = [START_DEPOT] + target_bins
+    # Pre-calculate coordinates array covering Depot, regular bins, and intermediate facilities
+    coords = [START_DEPOT] + target_bins + dummy_dump_nodes
     
     # Extract latitudes and longitudes
     lats = np.array([c.get("latitude", c.get("lat")) for c in coords])
@@ -233,9 +279,9 @@ def calculate_optimal_route() -> Dict[str, Any]:
     # Initialize the full distance matrix
     distance_matrix = np.zeros((num_nodes, num_nodes), dtype=int)
     
-    # Assign costs between Depot and Bins
-    edge_costs = dist_matrix_km * FUEL_COST_PER_KM * COST_MULTIPLIER
-    distance_matrix[:num_bins + 1, :num_bins + 1] = edge_costs.astype(int)
+    # Assign costs between Depot, Bins, and Intermediate Disposal points
+    edge_costs = dist_matrix_km * fuel_cost_per_km * COST_MULTIPLIER
+    distance_matrix[:num_bins + num_dummy_dumps + 1, :num_bins + num_dummy_dumps + 1] = edge_costs.astype(int)
     
     # Clear diagonal
     np.fill_diagonal(distance_matrix, 0)
@@ -259,8 +305,8 @@ def calculate_optimal_route() -> Dict[str, Any]:
     # Min distance to any end facility for each node
     min_dist_to_end = np.min(dist_to_ends_km, axis=1)
     
-    # Only bins (1 to num_bins) connect to dummy end node
-    distance_matrix[1:num_bins + 1, dummy_end_index] = (min_dist_to_end[1:] * FUEL_COST_PER_KM * COST_MULTIPLIER).astype(int)
+    # All active collection nodes (bins and intermediate facilities) can terminate at the final dummy end node
+    distance_matrix[1:num_bins + num_dummy_dumps + 1, dummy_end_index] = (min_dist_to_end[1:] * fuel_cost_per_km * COST_MULTIPLIER).astype(int)
     
     # The Dummy End Node is a sink; leaving it costs 0
     distance_matrix[dummy_end_index, :] = 0
@@ -271,7 +317,12 @@ def calculate_optimal_route() -> Dict[str, Any]:
         volume = (b.get("fill_percentage", 0) / 100.0) * b.get("capacity", 100.0)
         demands[i] = int(volume * 10)  # Scale by 10 for integer precision
         
-    scaled_van_capacity = int(VAN_MAX_CAPACITY * 10)
+    scaled_van_capacity = int(van_capacity * 10)
+    
+    # Apply negative absorbing demand weights to intermediate reload nodes
+    for k in range(num_dummy_dumps):
+        d_idx = num_bins + 1 + k
+        demands[d_idx] = -scaled_van_capacity
     
     # Max vehicles we could possibly use
     num_vehicles = num_bins
@@ -300,11 +351,19 @@ def calculate_optimal_route() -> Dict[str, Any]:
     demand_callback_index = routing.RegisterUnaryTransitCallback(demand_callback)
     routing.AddDimensionWithVehicleCapacity(
         demand_callback_index,
-        0,  # null capacity slack
+        0,  # null capacity slack globally
         [scaled_van_capacity] * num_vehicles,  # vehicle maximum capacities
         True,  # start cumul to zero
         'Capacity'
     )
+    capacity_dimension = routing.GetDimensionOrDie('Capacity')
+    
+    # Render intermediate dummy dump nodes fully optional via disjunctions
+    for k in range(num_dummy_dumps):
+        d_idx = num_bins + 1 + k
+        routing.AddDisjunction([d_idx], 0)
+        # Authorize localized slack dimension variable up to full capacity to cleanly reset cumulative loads
+        capacity_dimension.SlackVar(d_idx).SetMax(scaled_van_capacity)
 
     # 5. Solve the CVRP
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
@@ -327,6 +386,7 @@ def calculate_optimal_route() -> Dict[str, Any]:
     # Gather all route sequences first
     route_tasks = []
     van_id = 1
+    all_target_nodes = target_bins + dummy_dump_nodes
     
     for vehicle_id in range(num_vehicles):
         index = routing.Start(vehicle_id)
@@ -337,7 +397,7 @@ def calculate_optimal_route() -> Dict[str, Any]:
         while not routing.IsEnd(index):
             node_idx = manager.IndexToNode(index)
             if node_idx != depot_index and node_idx != dummy_end_index:
-                route_nodes.append(target_bins[node_idx - 1])
+                route_nodes.append(all_target_nodes[node_idx - 1])
             index = solution.Value(routing.NextVar(index))
             
         if not route_nodes:
@@ -373,9 +433,9 @@ def calculate_optimal_route() -> Dict[str, Any]:
             vid, r_nodes, cend, route_data = future.result()
             
             dist = route_data["total_distance"]
-            fuel = dist / FUEL_CONSUMPTION_KM_PER_LITER
-            cost = (fuel * FUEL_PRICE_PER_LITER) + VAN_DISPATCH_FIXED_COST
-            total_volume = sum((b.get("fill_percentage", 0) / 100.0) * b.get("capacity", 100.0) for b in r_nodes)
+            fuel = dist / mileage_kmpl if mileage_kmpl > 0 else 0.0
+            cost = (fuel * fuel_price) + VAN_DISPATCH_FIXED_COST
+            total_volume = sum((b.get("fill_percentage", 0) / 100.0) * b.get("capacity", 100.0) for b in r_nodes if not b.get("is_dump_site"))
             
             fleet_routes.append({
                 "van_id": vid,
