@@ -11,14 +11,14 @@ const AnimatedVehicle = ({ roadGeometry }) => {
     if (roadGeometry && roadGeometry.length > 0) {
       intervalId = setInterval(() => {
         setAnimatedPositionIndex((prev) => {
-          // Increment by a frame step (e.g. 3) to make movement visible and steady over dense coordinates
-          const nextIndex = prev + 3;
+          // Increment by a frame step of 1 to make movement slower and smoother over dense coordinates
+          const nextIndex = prev + 1;
           if (nextIndex >= roadGeometry.length) {
             return 0; // Loop back to start
           }
           return nextIndex;
         });
-      }, 40); // 40ms interval for smooth animation (~25fps)
+      }, 50); // 50ms interval for slower animation (~20fps)
     }
 
     return () => {
@@ -36,9 +36,9 @@ const AnimatedVehicle = ({ roadGeometry }) => {
   if (!roadGeometry || !roadGeometry[animatedPositionIndex]) return null;
 
   return (
-    <Marker 
-      position={roadGeometry[animatedPositionIndex]} 
-      icon={getVehicleIcon()} 
+    <Marker
+      position={roadGeometry[animatedPositionIndex]}
+      icon={getVehicleIcon()}
       zIndexOffset={1000}
     />
   );
@@ -49,15 +49,21 @@ const BoundsUpdater = ({ optimalRoute }) => {
   const map = useMap();
 
   useEffect(() => {
-    if (optimalRoute?.roadGeometry && optimalRoute.roadGeometry.length > 1) {
-      map.fitBounds(optimalRoute.roadGeometry, { padding: [40, 40], maxZoom: 15 });
-    } else {
-      // Default bounds focusing cleanly over Bhopal municipal boundaries
-      map.fitBounds([
-        [23.2244, 77.4027],
-        [23.2524, 77.5404]
-      ], { padding: [50, 50], maxZoom: 14 });
+    if (optimalRoute?.fleet_routes && optimalRoute.fleet_routes.length > 0) {
+      const allCoords = [];
+      optimalRoute.fleet_routes.forEach(r => {
+        if (r.roadGeometry) allCoords.push(...r.roadGeometry);
+      });
+      if (allCoords.length > 1) {
+        map.fitBounds(allCoords, { padding: [40, 40], maxZoom: 15 });
+        return;
+      }
     }
+    // Default bounds focusing cleanly over Bhopal municipal boundaries
+    map.fitBounds([
+      [23.2244, 77.4027],
+      [23.2524, 77.5404]
+    ], { padding: [50, 50], maxZoom: 14 });
   }, [map, optimalRoute]);
 
   return null;
@@ -91,7 +97,7 @@ const getEndIcon = () => {
 const getCustomIcon = (fillPercentage) => {
   let colorClass = 'bg-emerald-500 shadow-emerald-500/40';
   let pulseClass = 'bg-emerald-400';
-  
+
   if (fillPercentage > 80) {
     colorClass = 'bg-rose-500 shadow-rose-500/50 animate-pulse';
     pulseClass = 'bg-rose-400';
@@ -117,51 +123,69 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
   // Center map focused around localized Bhopal coordinates initially
   const centerPosition = [23.2360, 77.4700];
 
-  // Interpolation logic for color gradient
-  const interpolateColor = (factor) => {
-    // Start color: Cyan rgb(6, 182, 212) -> Tailwind cyan-500
-    // End color: Purple rgb(192, 132, 252) -> Tailwind purple-400
-    const r = Math.round(6 + factor * (192 - 6));
-    const g = Math.round(182 + factor * (132 - 182));
-    const b = Math.round(212 + factor * (252 - 212));
-    return `rgb(${r}, ${g}, ${b})`;
+  // Array of distinct, high-contrast hex colors for different vans
+  const vanColors = [
+    '#3b82f6', // Blue (Van 1)
+    '#f97316', // Orange (Van 2)
+    '#a855f7', // Purple (Van 3)
+    '#ec4899', // Pink (Van 4)
+    '#10b981', // Emerald (Van 5)
+    '#eab308'  // Yellow (Van 6)
+  ];
+
+  const getVanColor = (vanId) => {
+    // Fallback to blue if vanId exceeds our array (vanId starts at 1)
+    return vanColors[(vanId - 1) % vanColors.length] || vanColors[0];
   };
 
-  // Build segments for gradient polyline
-  const routeSegments = useMemo(() => {
-    let segments = [];
-    if (optimalRoute?.roadGeometry && optimalRoute.roadGeometry.length > 1) {
-      const totalPoints = optimalRoute.roadGeometry.length;
-      for (let i = 0; i < totalPoints - 1; i++) {
-        const factor = i / (totalPoints - 1);
-        segments.push({
-          positions: [optimalRoute.roadGeometry[i], optimalRoute.roadGeometry[i + 1]],
-          color: interpolateColor(factor)
+  // Build segments for distinct polyline for ALL vans
+  const allRouteSegments = useMemo(() => {
+    let allSegments = [];
+    if (!optimalRoute?.fleet_routes) return allSegments;
+
+    optimalRoute.fleet_routes.forEach((fleetRoute) => {
+      if (fleetRoute.roadGeometry && fleetRoute.roadGeometry.length > 1) {
+        allSegments.push({
+          positions: fleetRoute.roadGeometry,
+          color: getVanColor(fleetRoute.van_id),
+          vanId: fleetRoute.van_id
         });
       }
-    }
-    return segments;
-  }, [optimalRoute?.roadGeometry]);
+    });
+    return allSegments;
+  }, [optimalRoute?.fleet_routes]);
 
   // Straight line segments fallback logic mapping active nodes
   const polylinePositions = useMemo(() => {
-    if (!optimalRoute?.route) return [];
-    return optimalRoute.route.map((id) => {
-      if (id === 'depot') return [23.2244, 77.4027];
-      const target = bins.find((b) => b.bin_id === id);
-      if (target && target.latitude && target.longitude) {
-        return [target.latitude, target.longitude];
+    if (!optimalRoute?.fleet_routes) return [];
+
+    let allLines = [];
+    optimalRoute.fleet_routes.forEach((fleetRoute) => {
+      const positions = fleetRoute.route.map((id) => {
+        if (id === 'depot') return [23.2244, 77.4027];
+        if (id === 'dump_east') return [23.2524, 77.5404];
+        if (id === 'dump_north') return [23.2800, 77.4000];
+
+        const target = bins.find((b) => b.bin_id === id);
+        if (target && target.latitude && target.longitude) {
+          return [target.latitude, target.longitude];
+        }
+        return null;
+      }).filter(Boolean);
+
+      if (positions.length > 1) {
+        allLines.push(positions);
       }
-      return null;
-    }).filter(Boolean);
-  }, [optimalRoute?.route, bins]);
+    });
+    return allLines;
+  }, [optimalRoute?.fleet_routes, bins]);
 
   return (
     <div className="w-full h-[520px] rounded-2xl overflow-hidden glass-panel border border-slate-800 relative z-10 shadow-2xl">
-      <MapContainer 
-        center={centerPosition} 
-        zoom={13} 
-        scrollWheelZoom={true} 
+      <MapContainer
+        center={centerPosition}
+        zoom={13}
+        scrollWheelZoom={true}
         style={{ width: '100%', height: '100%', background: '#0b0f19' }}
       >
         <BoundsUpdater optimalRoute={optimalRoute} />
@@ -182,15 +206,24 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
           </Popup>
         </Marker>
 
-        {/* Permanent Ending Dump Site Marker: Solid Waste Management Facility */}
-        <Marker position={[23.2524, 77.5404]} icon={getEndIcon()}>
-          <Popup className="rounded-xl bg-slate-900 text-slate-200 border-none">
-            <div className="p-1 text-slate-200 font-sans text-left">
-              <p className="font-bold text-xs text-white">Solid Waste Management Facility</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">Terminal dumping &amp; sorting grounds for dispatch fleet</p>
-            </div>
-          </Popup>
-        </Marker>
+        {/* Dynamic Ending Dump Site Markers Extracted from Final Route Coordinates */}
+        {optimalRoute?.fleet_routes && optimalRoute.fleet_routes.map((route, idx) => {
+          if (!route.roadGeometry || route.roadGeometry.length === 0) return null;
+          const finalCoord = route.roadGeometry[route.roadGeometry.length - 1];
+          return (
+            <Marker key={`end-marker-${route.van_id}-${idx}`} position={finalCoord} icon={getEndIcon()}>
+              <Popup className="rounded-xl bg-slate-900 text-slate-200 border-none">
+                <div className="p-1 text-slate-200 font-sans text-left">
+                  <p className="font-bold text-xs text-white flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: getVanColor(route.van_id) }}></span>
+                    End: Waste Facility
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Terminal dumping grounds for Van {route.van_id}</p>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
 
         {/* Real-time Dynamic IoT Dustbin Node Markers */}
         {bins.map((bin) => {
@@ -199,9 +232,9 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
           if (!lat || !lng) return null;
 
           return (
-            <Marker 
-              key={bin.bin_id} 
-              position={[lat, lng]} 
+            <Marker
+              key={bin.bin_id}
+              position={[lat, lng]}
               icon={getCustomIcon(bin.fill_percentage || 0)}
               eventHandlers={{
                 click: () => setSelectedBin(bin),
@@ -230,9 +263,8 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
                     </div>
                     <div className="flex justify-between items-center pt-1.5 mt-1.5 border-t border-slate-700">
                       <span className="text-slate-400">Sensor State:</span>
-                      <span className={`font-bold text-[10px] ${
-                        bin.status === 'Critical' ? 'text-rose-500 animate-pulse' : bin.status === 'Needs Collection' ? 'text-amber-500' : 'text-emerald-500'
-                      }`}>
+                      <span className={`font-bold text-[10px] ${bin.status === 'Critical' ? 'text-rose-500 animate-pulse' : bin.status === 'Needs Collection' ? 'text-amber-500' : 'text-emerald-500'
+                        }`}>
                         {bin.status}
                       </span>
                     </div>
@@ -244,39 +276,48 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
         })}
 
         {/* Calculated OSRM Road-Snapped Route Overlay (Gradient) */}
-        {routeSegments.length > 0 ? (
+        {allRouteSegments.length > 0 ? (
           <>
-            {routeSegments.map((segment, index) => (
-              <Polyline 
-                key={`segment-${index}`}
-                positions={segment.positions} 
-                pathOptions={{ 
-                  color: segment.color, 
-                  weight: 6, 
-                  opacity: 0.85, 
+            {allRouteSegments.map((segment, index) => (
+              <Polyline
+                key={`segment-${segment.vanId}-${index}`}
+                positions={segment.positions}
+                pathOptions={{
+                  color: segment.color,
+                  weight: 6,
+                  opacity: 0.85,
                   lineCap: 'round',
                   lineJoin: 'round'
-                }} 
+                }}
               />
             ))}
-            {/* Animated Vehicle Marker */}
-            <AnimatedVehicle roadGeometry={optimalRoute.roadGeometry} />
+            {/* Animated Vehicle Markers (One per van) */}
+            {optimalRoute.fleet_routes.map(r => (
+              r.roadGeometry && r.roadGeometry.length > 1 && (
+                <AnimatedVehicle key={`van-${r.van_id}`} roadGeometry={r.roadGeometry} />
+              )
+            ))}
           </>
-        ) : polylinePositions && polylinePositions.length > 1 && (
-          <Polyline 
-            positions={polylinePositions} 
-            pathOptions={{ 
-              color: '#0284c7', 
-              weight: 4.5, 
-              opacity: 0.9, 
-              dashArray: '8, 8',
-              lineCap: 'round',
-              lineJoin: 'round'
-            }} 
-          />
+        ) : polylinePositions.length > 0 && (
+          <>
+            {polylinePositions.map((positions, index) => (
+              <Polyline
+                key={`fallback-${index}`}
+                positions={positions}
+                pathOptions={{
+                  color: '#0284c7',
+                  weight: 4.5,
+                  opacity: 0.9,
+                  dashArray: '8, 8',
+                  lineCap: 'round',
+                  lineJoin: 'round'
+                }}
+              />
+            ))}
+          </>
         )}
       </MapContainer>
-      
+
       {/* Aesthetic integrated Status Legend container */}
       <div className="absolute bottom-3 left-3 z-[400] glass-card p-2 rounded-xl border border-slate-700/60 text-[10px] flex items-center gap-2.5 bg-slate-900/90 text-slate-300">
         <span className="font-semibold text-slate-400">Map Fill Levels:</span>

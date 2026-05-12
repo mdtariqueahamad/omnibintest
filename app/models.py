@@ -40,8 +40,24 @@ class RouteStep(BaseModel):
     priority: int
 
 
-class RouteResponse(BaseModel):
+class FleetRoute(BaseModel):
+    van_id: int
     route: List[str]
     details: List[RouteStep]
+    distance_km: float
+    fuel_liters: float
+    cost_inr: float
+    roadGeometry: Optional[List[List[float]]] = None
+
+
+class FleetTotals(BaseModel):
+    total_vans: int
     total_distance: float
+    total_fuel: float
+    total_cost: float
+
+
+class RouteResponse(BaseModel):
+    fleet_routes: List[FleetRoute]
+    fleet_totals: FleetTotals
     message: str

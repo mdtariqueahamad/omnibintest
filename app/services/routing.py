@@ -1,23 +1,24 @@
+import math
 from typing import Dict, Any, List
 import networkx as nx
 import numpy as np
 import requests
 import logging
+from sklearn.cluster import KMeans
 from app.services.bin_service import get_all_bins
 
-# Fixed coordinates for the Starting Depot (Bhopal Nagar Nigam Building)
-DEPOT_ID = "depot"
-DEPOT_LOCATION = "Bhopal Nagar Nigam Building"
-DEPOT_LAT = 23.2244
-DEPOT_LON = 77.4027
-
-# Fixed coordinates for the Ending Solid Waste Dump Site
-END_ID = "waste_facility"
-END_LOCATION = "Solid Waste Management Facility"
-END_LAT = 23.2524
-END_LON = 77.5404
-
 logger = logging.getLogger(__name__)
+
+# Configuration Constants
+VAN_CAPACITY_LITERS = 500.0
+FUEL_CONSUMPTION_KM_PER_LITER = 5.5
+FUEL_PRICE_PER_LITER = 95.0
+
+START_DEPOT = {"lat": 23.2244, "lon": 77.4027, "id": "depot", "location": "Bhopal Nagar Nigam Building"}
+END_FACILITIES = [
+    {"lat": 23.2524, "lon": 77.5404, "id": "dump_east", "location": "Solid Waste Management Facility (East)"},
+    {"lat": 23.2800, "lon": 77.4000, "id": "dump_north", "location": "Solid Waste Management Facility (North)"}
+]
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate the great-circle distance between two points on Earth in kilometers using Numpy."""
@@ -30,30 +31,22 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return float(R * c)
 
 
-def _calculate_osrm_route(target_bins: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _calculate_osrm_route(target_bins: List[Dict[str, Any]], end_facility: Dict[str, Any]) -> Dict[str, Any]:
     """
     Attempts to calculate an optimal road-snapped route using the Open Source Routing Machine (OSRM) API.
     """
-    # 1. Format coordinates: lon,lat;lon,lat;...
-    locations = [f"{DEPOT_LON},{DEPOT_LAT}"]
-    node_ids = [DEPOT_ID]
+    locations = [f"{START_DEPOT['lon']},{START_DEPOT['lat']}"]
+    node_ids = [START_DEPOT['id']]
     
     for b in target_bins:
-        # Validate coordinates exist
         if b.get("longitude") is not None and b.get("latitude") is not None:
             locations.append(f"{b['longitude']},{b['latitude']}")
             node_ids.append(b["bin_id"])
             
-    # Append the END coordinates to strictly end at the Waste Facility
-    locations.append(f"{END_LON},{END_LAT}")
-    node_ids.append(END_ID)
+    locations.append(f"{end_facility['lon']},{end_facility['lat']}")
+    node_ids.append(end_facility["id"])
             
     coords_str = ";".join(locations)
-    
-    # OSRM Trip API request
-    # source=first ensures we start at the depot
-    # destination=last ensures we end at the waste facility
-    # roundtrip=false guarantees an open path
     url = f"http://router.project-osrm.org/trip/v1/driving/{coords_str}?source=first&destination=last&roundtrip=false&geometries=geojson"
     
     response = requests.get(url, timeout=15)
@@ -65,31 +58,24 @@ def _calculate_osrm_route(target_bins: List[Dict[str, Any]]) -> Dict[str, Any]:
         
     trip = data["trips"][0]
     waypoints = data["waypoints"]
-    
-    # Total distance in km
     total_dist = trip["distance"] / 1000.0
     
-    # 2. Extract road-snapped GeoJSON geometry
-    # OSRM returns GeoJSON coordinates as [lon, lat], Leaflet expects [lat, lon]
     geometry = trip["geometry"]["coordinates"]
     road_geometry = [[coord[1], coord[0]] for coord in geometry]
     
-    # 3. Order the nodes according to the OSRM TSP waypoint_index
     ordered_ids = [None] * len(waypoints)
     for idx, wp in enumerate(waypoints):
         w_index = wp["waypoint_index"]
         ordered_ids[w_index] = node_ids[idx]
         
-    # Build open path (starts at depot, ends at facility)
     tsp_cycle = ordered_ids
     
-    # 4. Build details metadata
     details = []
     step_counter = 1
     bin_lookup = {b["bin_id"]: b for b in target_bins}
     
     for b_id in ordered_ids:
-        if b_id in (DEPOT_ID, END_ID):
+        if b_id in (START_DEPOT['id'], end_facility['id']):
             continue
             
         b_info = bin_lookup[b_id]
@@ -106,18 +92,17 @@ def _calculate_osrm_route(target_bins: List[Dict[str, Any]]) -> Dict[str, Any]:
         "route": tsp_cycle,
         "details": details,
         "total_distance": round(total_dist, 3),
-        "roadGeometry": road_geometry,
-        "message": f"Successfully calculated optimal OSRM road network route covering {len(details)} bins."
+        "roadGeometry": road_geometry
     }
 
 
-def _calculate_networkx_fallback_route(target_bins: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _calculate_networkx_fallback_route(target_bins: List[Dict[str, Any]], end_facility: Dict[str, Any]) -> Dict[str, Any]:
     """
     Fallback method using NetworkX Euclidean (Haversine) distances when OSRM fails.
     """
     G = nx.Graph()
-    G.add_node(DEPOT_ID, location=DEPOT_LOCATION, lat=DEPOT_LAT, lon=DEPOT_LON, fill_percentage=0.0, priority=0)
-    G.add_node(END_ID, location=END_LOCATION, lat=END_LAT, lon=END_LON, fill_percentage=0.0, priority=0)
+    G.add_node(START_DEPOT['id'], location=START_DEPOT['location'], lat=START_DEPOT['lat'], lon=START_DEPOT['lon'], fill_percentage=0.0, priority=0)
+    G.add_node(end_facility['id'], location=end_facility['location'], lat=end_facility['lat'], lon=end_facility['lon'], fill_percentage=0.0, priority=0)
 
     bin_lookup = {}
     for b in target_bins:
@@ -142,11 +127,10 @@ def _calculate_networkx_fallback_route(target_bins: List[Dict[str, Any]]) -> Dic
 
     tsp_cycle = nx.approximation.traveling_salesman_problem(G, weight="weight", cycle=True)
 
-    if tsp_cycle[0] != DEPOT_ID:
-        depot_index = tsp_cycle.index(DEPOT_ID)
+    if tsp_cycle[0] != START_DEPOT['id']:
+        depot_index = tsp_cycle.index(START_DEPOT['id'])
         tsp_cycle = tsp_cycle[depot_index:-1] + tsp_cycle[:depot_index]
     else:
-        # Remove loop-back logic
         tsp_cycle = tsp_cycle[:-1]
 
     total_dist = 0.0
@@ -160,7 +144,7 @@ def _calculate_networkx_fallback_route(target_bins: List[Dict[str, Any]]) -> Dic
         edge_data = G.get_edge_data(u, v)
         total_dist += edge_data["weight"]
 
-        if v not in (DEPOT_ID, END_ID) and v not in visited_bins:
+        if v not in (START_DEPOT['id'], end_facility['id']) and v not in visited_bins:
             visited_bins.add(v)
             b_info = bin_lookup[v]
             details.append({
@@ -178,39 +162,127 @@ def _calculate_networkx_fallback_route(target_bins: List[Dict[str, Any]]) -> Dic
         "route": tsp_cycle,
         "details": details,
         "total_distance": round(total_dist, 3),
-        "roadGeometry": None, # Signal frontend to use straight dashed lines
-        "message": f"Successfully calculated fallback straight-line route covering {len(details)} bins."
+        "roadGeometry": None
     }
 
 
 def calculate_optimal_route() -> Dict[str, Any]:
-    """
-    Analyzes bin fill levels, filters candidate bins, and generates an optimal TSP route.
-    Prefers high-level OSRM API, falls back to local NetworkX approximation on failure.
-    """
     all_bins = get_all_bins()
 
     target_bins = []
+    total_volume = 0.0
     for b in all_bins:
         fill = b.get("fill_percentage", 0.0)
         prio = b.get("priority", 1)
         status = b.get("status", "OK")
+        cap = b.get("capacity", 100.0)
 
         if fill >= 70.0 or status in ["Needs Collection", "Critical"] or (prio == 3 and fill >= 50.0):
             target_bins.append(b)
+            total_volume += (fill / 100.0) * cap
 
     if not target_bins:
         return {
-            "route": [DEPOT_ID],
-            "details": [],
-            "total_distance": 0.0,
-            "roadGeometry": None,
+            "fleet_routes": [],
+            "fleet_totals": {
+                "total_vans": 0,
+                "total_distance": 0.0,
+                "total_fuel": 0.0,
+                "total_cost": 0.0
+            },
             "message": "No bins require collection at this time."
         }
 
-    # Attempt high-level OSRM route
-    try:
-        return _calculate_osrm_route(target_bins)
-    except Exception as e:
-        logger.error(f"OSRM routing failed: {str(e)}. Falling back to NetworkX Euclidean solver.")
-        return _calculate_networkx_fallback_route(target_bins)
+    num_vans = max(1, math.ceil(total_volume / VAN_CAPACITY_LITERS))
+    
+    # 1. Geographic Clustering via K-Means
+    coords = np.array([[b.get("latitude", 0), b.get("longitude", 0)] for b in target_bins])
+    
+    if num_vans >= len(target_bins):
+        clusters = {i: [target_bins[i]] for i in range(len(target_bins))}
+    else:
+        kmeans = KMeans(n_clusters=num_vans, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(coords)
+        
+        clusters = {i: [] for i in range(num_vans)}
+        for i, label in enumerate(labels):
+            clusters[label].append(target_bins[i])
+            
+        # Capacity Rebalancing
+        overloaded = True
+        iterations = 0
+        while overloaded and iterations < 100:
+            overloaded = False
+            iterations += 1
+            for c_id, bins_list in clusters.items():
+                c_vol = sum((b.get("fill_percentage", 0)/100.0)*b.get("capacity", 100.0) for b in bins_list)
+                if c_vol > VAN_CAPACITY_LITERS:
+                    overloaded = True
+                    underloaded = []
+                    for uc_id, ubins_list in list(clusters.items()):
+                        if uc_id != c_id:
+                            uc_vol = sum((b.get("fill_percentage", 0)/100.0)*b.get("capacity", 100.0) for b in ubins_list)
+                            if uc_vol < VAN_CAPACITY_LITERS:
+                                underloaded.append((uc_id, VAN_CAPACITY_LITERS - uc_vol))
+                    
+                    if not underloaded:
+                        new_c_id = len(clusters)
+                        clusters[new_c_id] = []
+                        underloaded.append((new_c_id, VAN_CAPACITY_LITERS))
+                        num_vans += 1
+                        
+                    bin_to_move = bins_list.pop()
+                    best_uc = underloaded[0][0]
+                    clusters[best_uc].append(bin_to_move)
+                    break 
+                    
+    # 2. VRP Routing and Fuel Calculation
+    fleet_routes = []
+    tot_dist = 0.0
+    tot_fuel = 0.0
+    tot_cost = 0.0
+    
+    van_id = 1
+    for c_id, c_bins in clusters.items():
+        if not c_bins:
+            continue
+            
+        c_lat = np.mean([b["latitude"] for b in c_bins])
+        c_lon = np.mean([b["longitude"] for b in c_bins])
+        closest_end = min(END_FACILITIES, key=lambda ef: haversine_distance(c_lat, c_lon, ef["lat"], ef["lon"]))
+        
+        try:
+            route_data = _calculate_osrm_route(c_bins, closest_end)
+        except Exception as e:
+            logger.error(f"OSRM failed for van {van_id}, falling back: {e}")
+            route_data = _calculate_networkx_fallback_route(c_bins, closest_end)
+            
+        dist = route_data["total_distance"]
+        fuel = dist / FUEL_CONSUMPTION_KM_PER_LITER
+        cost = fuel * FUEL_PRICE_PER_LITER
+        
+        fleet_routes.append({
+            "van_id": van_id,
+            "route": route_data["route"],
+            "details": route_data["details"],
+            "distance_km": round(dist, 2),
+            "fuel_liters": round(fuel, 2),
+            "cost_inr": round(cost, 2),
+            "roadGeometry": route_data["roadGeometry"]
+        })
+        
+        tot_dist += dist
+        tot_fuel += fuel
+        tot_cost += cost
+        van_id += 1
+        
+    return {
+        "fleet_routes": fleet_routes,
+        "fleet_totals": {
+            "total_vans": len(fleet_routes),
+            "total_distance": round(tot_dist, 2),
+            "total_fuel": round(tot_fuel, 2),
+            "total_cost": round(tot_cost, 2)
+        },
+        "message": f"Successfully planned {len(fleet_routes)} van routes for {len(target_bins)} bins."
+    }
