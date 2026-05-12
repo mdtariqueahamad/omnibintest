@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Route, Sparkles, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
-import { fetchOptimalRoute } from '../services/api';
+import { fetchOptimalRoute, fetchOsrmRoute } from '../services/api';
 
-const RoutePanel = ({ optimalRoute, setOptimalRoute }) => {
+const RoutePanel = ({ optimalRoute, setOptimalRoute, bins = [] }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -11,6 +11,34 @@ const RoutePanel = ({ optimalRoute, setOptimalRoute }) => {
     setError(null);
     try {
       const data = await fetchOptimalRoute();
+
+      // Resolve longitude,latitude string sequence for the OSRM street-snapped driving API
+      if (data && data.route && data.route.length > 1) {
+        const coordStrings = data.route.map((id) => {
+          if (id === 'depot') return '-122.4100,37.7700';
+          const target = bins.find((b) => b.bin_id === id);
+          if (target && target.longitude && target.latitude) {
+            return `${target.longitude},${target.latitude}`;
+          }
+          return null;
+        }).filter(Boolean);
+
+        // Fetch snapped road geometry from OSRM if multi-point route exists
+        if (coordStrings.length > 1) {
+          try {
+            const osrmData = await fetchOsrmRoute(coordStrings.join(';'));
+            if (osrmData && osrmData.routes && osrmData.routes[0]) {
+              // Extract GeoJSON LineString coordinates: [[lng, lat], [lng, lat], ...]
+              // Convert to standard Leaflet Polyline format: [[lat, lng], [lat, lng], ...]
+              const geojsonCoords = osrmData.routes[0].geometry.coordinates;
+              data.roadGeometry = geojsonCoords.map(([lng, lat]) => [lat, lng]);
+            }
+          } catch (osrmErr) {
+            console.error("OSRM road geometry extraction fallback:", osrmErr);
+          }
+        }
+      }
+
       setOptimalRoute(data);
     } catch (err) {
       setError('Failed to compute TSP optimization route. Ensure backend microservice is operational.');

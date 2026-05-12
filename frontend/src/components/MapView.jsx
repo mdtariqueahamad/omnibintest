@@ -128,8 +128,19 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
           );
         })}
 
-        {/* Calculated NetworkX TSP Path Traversal Overlay */}
-        {polylinePositions && polylinePositions.length > 1 && (
+        {/* Calculated OSRM Road-Snapped or Straight-Line TSP Path Overlay */}
+        {optimalRoute?.roadGeometry && optimalRoute.roadGeometry.length > 1 ? (
+          <Polyline 
+            positions={optimalRoute.roadGeometry} 
+            pathOptions={{ 
+              color: '#2563eb', 
+              weight: 6, 
+              opacity: 0.75, 
+              lineCap: 'round',
+              lineJoin: 'round'
+            }} 
+          />
+        ) : polylinePositions && polylinePositions.length > 1 && (
           <Polyline 
             positions={polylinePositions} 
             pathOptions={{ 

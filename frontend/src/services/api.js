@@ -49,3 +49,15 @@ export const seedBins = async () => {
     throw error;
   }
 };
+
+// Query the free public Open Source Routing Machine (OSRM) API for real street geometry
+export const fetchOsrmRoute = async (coordString) => {
+  try {
+    const response = await axios.get(`http://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching OSRM road geometry:", error);
+    throw error;
+  }
+};
+

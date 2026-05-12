@@ -119,7 +119,7 @@ function App() {
                 <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} />
               </div>
               <div className="lg:col-span-1 flex flex-col gap-6">
-                <RoutePanel optimalRoute={optimalRoute} setOptimalRoute={setOptimalRoute} />
+                <RoutePanel optimalRoute={optimalRoute} setOptimalRoute={setOptimalRoute} bins={bins} />
                 
                 {/* Instant focus alert block mapping critical state hubs */}
                 <div className="glass-panel rounded-2xl p-4 border border-slate-800 text-left flex-1 flex flex-col">
@@ -169,7 +169,7 @@ function App() {
               <h2 className="text-xl font-bold text-white">NetworkX Optimizer Sandbox</h2>
               <p className="text-xs text-slate-400">Evaluate dynamic edge limits and shortest metrics calculated from the depot</p>
             </div>
-            <RoutePanel optimalRoute={optimalRoute} setOptimalRoute={setOptimalRoute} />
+            <RoutePanel optimalRoute={optimalRoute} setOptimalRoute={setOptimalRoute} bins={bins} />
           </div>
         )}
 
