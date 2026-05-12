@@ -1,20 +1,52 @@
-import React from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import React, { useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
-// Generate dynamic custom colored HTML markers matching fill status thresholds
-const getCustomIcon = (fillPercentage, isDepot = false) => {
-  if (isDepot) {
-    return L.divIcon({
-      className: 'custom-div-icon',
-      html: `<div class="w-9 h-9 bg-gradient-to-br from-blue-600 to-indigo-700 border-2 border-white rounded-xl flex items-center justify-center shadow-xl shadow-blue-500/30">
-               <span class="text-[9px] font-extrabold text-white tracking-tighter">DEPOT</span>
-             </div>`,
-      iconSize: [36, 36],
-      iconAnchor: [18, 18],
-    });
-  }
+// Dynamic auto-bounds updater adjusting viewports perfectly around valid generated itineraries
+const BoundsUpdater = ({ optimalRoute }) => {
+  const map = useMap();
 
+  useEffect(() => {
+    if (optimalRoute?.roadGeometry && optimalRoute.roadGeometry.length > 1) {
+      map.fitBounds(optimalRoute.roadGeometry, { padding: [40, 40], maxZoom: 15 });
+    } else {
+      // Default bounds focusing cleanly over Bhopal municipal boundaries
+      map.fitBounds([
+        [23.2244, 77.4027],
+        [23.2524, 77.5404]
+      ], { padding: [50, 50], maxZoom: 14 });
+    }
+  }, [map, optimalRoute]);
+
+  return null;
+};
+
+// Permanent distinct icon styling for the Starting Municipal Building Depot
+const getStartIcon = () => {
+  return L.divIcon({
+    className: 'custom-div-icon',
+    html: `<div class="px-2.5 py-1 bg-blue-600 border-2 border-white rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/40">
+             <span class="text-[10px] font-extrabold text-white whitespace-nowrap">Start: Nagar Nigam</span>
+           </div>`,
+    iconSize: [110, 26],
+    iconAnchor: [55, 13],
+  });
+};
+
+// Permanent distinct icon styling for the Ending Solid Waste Dump Site
+const getEndIcon = () => {
+  return L.divIcon({
+    className: 'custom-div-icon',
+    html: `<div class="px-2.5 py-1 bg-slate-950 border-2 border-white rounded-lg flex items-center justify-center shadow-lg shadow-slate-950/50">
+             <span class="text-[10px] font-extrabold text-white whitespace-nowrap">End: Waste Facility</span>
+           </div>`,
+    iconSize: [110, 26],
+    iconAnchor: [55, 13],
+  });
+};
+
+// Generate dynamic custom colored HTML markers matching fill status thresholds
+const getCustomIcon = (fillPercentage) => {
   let colorClass = 'bg-emerald-500 shadow-emerald-500/40';
   let pulseClass = 'bg-emerald-400';
   
@@ -40,12 +72,12 @@ const getCustomIcon = (fillPercentage, isDepot = false) => {
 };
 
 const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
-  // Center map focused around simulated fleet coordinates
-  const centerPosition = [37.7749, -122.4194];
+  // Center map focused around localized Bhopal coordinates initially
+  const centerPosition = [23.2360, 77.4700];
 
-  // Map routing sequence string identifiers back to explicit latitude/longitude arrays for Leaflet polylines
+  // Straight line segments fallback logic mapping active nodes
   const polylinePositions = optimalRoute?.route?.map((id) => {
-    if (id === 'depot') return [37.7700, -122.4100];
+    if (id === 'depot') return [23.2244, 77.4027];
     const target = bins.find((b) => b.bin_id === id);
     if (target && target.latitude && target.longitude) {
       return [target.latitude, target.longitude];
@@ -61,18 +93,30 @@ const MapView = ({ bins, optimalRoute, setSelectedBin }) => {
         scrollWheelZoom={true} 
         style={{ width: '100%', height: '100%', background: '#0b0f19' }}
       >
+        <BoundsUpdater optimalRoute={optimalRoute} />
+
         {/* Beautiful high-contrast clean tiles optimal for dark background dashboards */}
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         />
 
-        {/* Central Fleet Collection Depot Static Marker */}
-        <Marker position={[37.7700, -122.4100]} icon={getCustomIcon(0, true)}>
+        {/* Permanent Starting Depot Marker: Bhopal Nagar Nigam Building */}
+        <Marker position={[23.2244, 77.4027]} icon={getStartIcon()}>
           <Popup>
             <div className="p-1 text-slate-900 font-sans text-left">
-              <p className="font-bold text-xs text-slate-900">Central Collection Depot</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">Origin staging area for dispatch collection fleets</p>
+              <p className="font-bold text-xs text-slate-900">Bhopal Nagar Nigam Building</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Municipal Corporation Headquarters &amp; Starting Dispatch Depot</p>
+            </div>
+          </Popup>
+        </Marker>
+
+        {/* Permanent Ending Dump Site Marker: Solid Waste Management Facility */}
+        <Marker position={[23.2524, 77.5404]} icon={getEndIcon()}>
+          <Popup>
+            <div className="p-1 text-slate-900 font-sans text-left">
+              <p className="font-bold text-xs text-slate-900">Solid Waste Management Facility</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Terminal dumping &amp; sorting grounds for dispatch fleet</p>
             </div>
           </Popup>
         </Marker>

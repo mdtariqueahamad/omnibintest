@@ -12,21 +12,31 @@ const RoutePanel = ({ optimalRoute, setOptimalRoute, bins = [] }) => {
     try {
       const data = await fetchOptimalRoute();
 
-      // Resolve longitude,latitude string sequence for the OSRM street-snapped driving API
-      if (data && data.route && data.route.length > 1) {
-        const coordStrings = data.route.map((id) => {
-          if (id === 'depot') return '-122.4100,37.7700';
-          const target = bins.find((b) => b.bin_id === id);
-          if (target && target.longitude && target.latitude) {
-            return `${target.longitude},${target.latitude}`;
-          }
-          return null;
-        }).filter(Boolean);
+      // Forcefully prepend Starting Depot and append Ending Dump Site to the OSRM route URL string
+      if (data && data.route) {
+        // First: Starting Depot (Bhopal Nagar Nigam Building) -> Longitude 77.4027, Latitude 23.2244
+        const startCoord = '77.4027,23.2244';
+        // Last: Ending Dump Site (Solid Waste Management Facility) -> Longitude 77.5404, Latitude 23.2524
+        const endCoord = '77.5404,23.2524';
 
-        // Fetch snapped road geometry from OSRM if multi-point route exists
-        if (coordStrings.length > 1) {
+        // Middle: Ordered array of optimized bin coordinates from backend, excluding placeholder depot nodes
+        const middleCoords = data.route
+          .filter((id) => id !== 'depot')
+          .map((id) => {
+            const target = bins.find((b) => b.bin_id === id);
+            if (target && target.longitude && target.latitude) {
+              return `${target.longitude},${target.latitude}`;
+            }
+            return null;
+          })
+          .filter(Boolean);
+
+        // Dynamic concatenation string separated by semicolons
+        const fullRouteCoords = [startCoord, ...middleCoords, endCoord];
+
+        if (fullRouteCoords.length >= 2) {
           try {
-            const osrmData = await fetchOsrmRoute(coordStrings.join(';'));
+            const osrmData = await fetchOsrmRoute(fullRouteCoords.join(';'));
             if (osrmData && osrmData.routes && osrmData.routes[0]) {
               // Extract GeoJSON LineString coordinates: [[lng, lat], [lng, lat], ...]
               // Convert to standard Leaflet Polyline format: [[lat, lng], [lat, lng], ...]

@@ -3,11 +3,11 @@ import networkx as nx
 import numpy as np
 from app.services.bin_service import get_all_bins
 
-# Fixed coordinates for the Central Waste Collection Depot
+# Fixed coordinates for the Starting Depot (Bhopal Nagar Nigam Building)
 DEPOT_ID = "depot"
-DEPOT_LOCATION = "Central Collection Depot"
-DEPOT_LAT = 37.7700
-DEPOT_LON = -122.4100
+DEPOT_LOCATION = "Bhopal Nagar Nigam Building"
+DEPOT_LAT = 23.2244
+DEPOT_LON = 77.4027
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
