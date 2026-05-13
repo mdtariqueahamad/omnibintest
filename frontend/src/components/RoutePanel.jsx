@@ -1,148 +1,151 @@
 import React, { useState } from 'react';
-import { Route, Sparkles, RefreshCw, AlertCircle, CheckCircle, Truck, Fuel, DollarSign } from 'lucide-react';
+import { Route, Sparkles, RefreshCw, AlertCircle, CheckCircle, Truck, Fuel, DollarSign, MapPin } from 'lucide-react';
 import { fetchOptimalRoute } from '../services/api';
 
 const RoutePanel = ({ optimalRoute, setOptimalRoute, bins = [] }) => {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error,   setError]   = useState(null);
 
   const handleGenerateRoute = async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
       const data = await fetchOptimalRoute();
-      // Backend now handles all VRP clustering and OSRM geometry fetching
       setOptimalRoute(data);
-    } catch (err) {
-      setError('Failed to compute VRP optimization route. Ensure backend microservice is operational.');
-    } finally {
-      setLoading(false);
-    }
+    } catch {
+      setError('Failed to compute VRP route. Ensure the backend service is running.');
+    } finally { setLoading(false); }
   };
 
+  const statItems = optimalRoute?.fleet_totals ? [
+    { icon: Truck,      label: 'Active Vans',     value: optimalRoute.fleet_totals.total_vans,       color: '#0d9488' },
+    { icon: Route,      label: 'Total Distance',  value: `${optimalRoute.fleet_totals.total_distance} km`, color: '#166534' },
+    { icon: Fuel,       label: 'Total Fuel',      value: `${optimalRoute.fleet_totals.total_fuel} L`,      color: '#dc2626' },
+    { icon: DollarSign, label: 'Est. Cost',        value: `₹${optimalRoute.fleet_totals.total_cost}`,      color: '#16a34a' },
+  ] : [];
+
   return (
-    <div className="glass-panel rounded-2xl p-6 border border-slate-800 text-left">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+    <div className="glass-panel rounded-2xl p-5 text-left">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
         <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Route className="w-5 h-5 text-blue-400" /> AI Fleet Dispatch Optimizer
+          <h2 className="text-sm font-bold flex items-center gap-2" style={{ color: '#0d4a2f' }}>
+            <Route className="w-4 h-4" style={{ color: '#16a34a' }} />
+            AI Fleet Dispatch Optimizer
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Multi-Vehicle Routing Problem (VRP) &amp; Geographic K-Means Clustering
+          <p className="text-[11px] mt-0.5" style={{ color: 'rgba(13,74,47,0.50)' }}>
+            Multi-Vehicle Routing Problem & K-Means Clustering
           </p>
         </div>
-
-        {/* Action Trigger Button */}
         <button
+          id="generate-routes-btn"
           onClick={handleGenerateRoute}
           disabled={loading}
-          className="relative inline-flex items-center justify-center p-0.5 overflow-hidden text-xs font-bold rounded-xl group bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-700 group-hover:from-cyan-500 group-hover:to-blue-600 hover:text-white text-white focus:ring-2 focus:outline-none focus:ring-cyan-800 transition-all active:scale-95 shadow-lg shadow-cyan-500/20 shrink-0 cursor-pointer"
+          className="btn-primary shrink-0 rounded-xl py-2.5 px-4 text-xs"
         >
-          <span className="relative px-4 py-2.5 transition-all ease-in duration-75 bg-slate-950 rounded-[10px] group-hover:bg-opacity-0 flex items-center gap-2">
-            {loading ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
-                <span>Computing Topology...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 text-cyan-400 group-hover:text-white transition-colors" />
-                <span>Generate Fleet Routes</span>
-              </>
-            )}
-          </span>
+          {loading
+            ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Computing...</>
+            : <><Sparkles className="w-3.5 h-3.5" /> Generate Routes</>}
         </button>
       </div>
 
-      {/* Error State Banner */}
+      {/* Error */}
       {error && (
-        <div className="mb-5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2.5 animate-pulse">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
+        <div className="mb-4 p-3 rounded-xl flex items-center gap-2.5"
+             style={{ background: 'rgba(254,226,226,0.60)', border: '1px solid rgba(239,68,68,0.22)' }}>
+          <AlertCircle className="w-4 h-4 shrink-0" style={{ color: '#dc2626' }} />
+          <span className="text-xs font-medium" style={{ color: '#991b1b' }}>{error}</span>
         </div>
       )}
 
-      {/* Calculated Optimization Results Header */}
-      {optimalRoute && optimalRoute.fleet_totals && (
+      {/* Route results */}
+      {optimalRoute?.fleet_totals && (
         <div className="space-y-4 animate-fade-in">
-          
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs">
-            <div>
-              <span className="text-slate-500 block text-[10px] uppercase font-semibold flex items-center gap-1"><Truck className="w-3 h-3"/> Active Vans</span>
-              <span className="font-bold text-white text-sm">{optimalRoute.fleet_totals.total_vans}</span>
-            </div>
-            <div>
-              <span className="text-slate-500 block text-[10px] uppercase font-semibold flex items-center gap-1"><Route className="w-3 h-3"/> Total Distance</span>
-              <span className="font-bold text-cyan-400 text-sm">{optimalRoute.fleet_totals.total_distance} km</span>
-            </div>
-            <div>
-              <span className="text-slate-500 block text-[10px] uppercase font-semibold flex items-center gap-1"><Fuel className="w-3 h-3"/> Total Fuel</span>
-              <span className="font-bold text-rose-400 text-sm">{optimalRoute.fleet_totals.total_fuel} L</span>
-            </div>
-            <div>
-              <span className="text-slate-500 block text-[10px] uppercase font-semibold flex items-center gap-1"><DollarSign className="w-3 h-3"/> Est. Cost</span>
-              <span className="font-bold text-emerald-400 text-sm">₹{optimalRoute.fleet_totals.total_cost}</span>
-            </div>
-            <div className="col-span-2 sm:col-span-4 mt-1 border-t border-slate-800/60 pt-2">
-              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Engine Message</span>
-              <span className="font-medium text-emerald-400 text-[11px] block">
-                {optimalRoute.message || 'VRP Tour Solved'}
-              </span>
-            </div>
+          {/* Summary stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 rounded-xl"
+               style={{ background: 'rgba(255,255,255,0.50)', border: '1px solid rgba(255,255,255,0.65)' }}>
+            {statItems.map(s => {
+              const Icon = s.icon;
+              return (
+                <div key={s.label} className="text-center">
+                  <div className="flex items-center justify-center gap-1 mb-0.5">
+                    <Icon className="w-3 h-3" style={{ color: 'rgba(13,74,47,0.45)' }} />
+                    <span className="text-[9px] font-bold uppercase tracking-wider"
+                          style={{ color: 'rgba(13,74,47,0.45)' }}>{s.label}</span>
+                  </div>
+                  <span className="font-black text-sm" style={{ color: s.color }}>{s.value}</span>
+                </div>
+              );
+            })}
+            {optimalRoute.message && (
+              <div className="col-span-2 sm:col-span-4 pt-2 text-center"
+                   style={{ borderTop: '1px solid rgba(13,74,47,0.08)' }}>
+                <span className="text-[11px] font-semibold" style={{ color: '#16a34a' }}>
+                  ✓ {optimalRoute.message || 'VRP Tour Solved'}
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Sequential Timeline Sequence List per Van */}
+          {/* Van manifest */}
           <div>
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-              Fleet Dispatch Manifest
-            </h3>
-            
+            <h3 className="text-[10px] font-black uppercase tracking-widest mb-3"
+                style={{ color: 'rgba(13,74,47,0.45)' }}>Fleet Dispatch Manifest</h3>
+
             {(!optimalRoute.fleet_routes || optimalRoute.fleet_routes.length === 0) ? (
-              <div className="p-4 rounded-xl text-center text-xs text-slate-500 bg-slate-900/40 border border-slate-800/80">
-                <CheckCircle className="w-5 h-5 mx-auto mb-1 text-emerald-500/80" />
-                No bins qualify under target fill levels. Active smart bin fleet is completely balanced.
+              <div className="p-4 rounded-xl text-center"
+                   style={{ background: 'rgba(22,163,74,0.07)', border: '1px solid rgba(22,163,74,0.18)' }}>
+                <CheckCircle className="w-5 h-5 mx-auto mb-1.5" style={{ color: '#16a34a' }} />
+                <p className="text-xs" style={{ color: 'rgba(13,74,47,0.55)' }}>
+                  No bins need collection. Fleet is fully balanced.
+                </p>
               </div>
             ) : (
-              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
-                {optimalRoute.fleet_routes.map((vanRoute) => (
-                  <div key={`van-${vanRoute.van_id}`} className="p-3 rounded-xl bg-slate-900/50 border border-slate-800/80">
-                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-800/50">
-                       <span className="text-sm font-bold text-white flex items-center gap-2">
-                         <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs">{vanRoute.van_id}</span>
-                         Van Alpha-{vanRoute.van_id}
-                       </span>
-                       <span className="text-[10px] text-slate-400 text-right">
-                         <span className="text-emerald-400 font-bold">{vanRoute.total_volume}L Load</span><br/>
-                         {vanRoute.distance_km}km | {vanRoute.fuel_liters}L | ₹{vanRoute.cost_inr}
-                       </span>
+              <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
+                {optimalRoute.fleet_routes.map(van => (
+                  <div key={`van-${van.van_id}`} className="p-3 rounded-xl"
+                       style={{ background: 'rgba(255,255,255,0.48)', border: '1px solid rgba(255,255,255,0.65)' }}>
+                    {/* Van header */}
+                    <div className="flex justify-between items-center mb-2.5 pb-2"
+                         style={{ borderBottom: '1px solid rgba(13,74,47,0.08)' }}>
+                      <span className="text-sm font-bold flex items-center gap-2" style={{ color: '#0d4a2f' }}>
+                        <span className="w-5 h-5 rounded-lg flex items-center justify-center text-[10px] font-black"
+                              style={{ background: 'rgba(13,148,136,0.14)', color: '#0d9488', border: '1px solid rgba(13,148,136,0.25)' }}>
+                          {van.van_id}
+                        </span>
+                        Van Alpha-{van.van_id}
+                      </span>
+                      <span className="text-[10px]" style={{ color: 'rgba(13,74,47,0.50)' }}>
+                        <span className="font-bold" style={{ color: '#16a34a' }}>{van.total_volume}L</span>
+                        {' '}· {van.distance_km}km · ₹{van.cost_inr}
+                      </span>
                     </div>
-                    
-                    <div className="space-y-2">
-                      {vanRoute.details.map((step, idx) => (
-                        <div 
-                          key={`${step.bin_id}-${idx}`}
-                          className="flex items-center justify-between gap-3"
-                        >
-                          <div className="flex items-center gap-3.5">
-                            <span className="w-5 h-5 rounded-lg bg-blue-500/10 border border-blue-500/20 font-mono text-[9px] font-bold text-blue-400 flex items-center justify-center shrink-0">
+
+                    {/* Steps */}
+                    <div className="space-y-1.5">
+                      {van.details.map((step, idx) => (
+                        <div key={`${step.bin_id}-${idx}`}
+                             className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-lg flex items-center justify-center text-[9px] font-black shrink-0"
+                                  style={{ background: 'rgba(22,163,74,0.10)', color: '#166534', border: '1px solid rgba(22,163,74,0.20)' }}>
                               {step.step_order}
                             </span>
-                            <div>
-                              <p className="text-xs font-bold text-slate-200">{step.location || step.bin_id}</p>
-                            </div>
+                            <p className="text-xs font-semibold truncate" style={{ color: '#0d4a2f' }}>
+                              {step.location || step.bin_id}
+                            </p>
                           </div>
-
-                          <div className="flex items-center gap-4 text-right shrink-0">
-                            <div>
-                              <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
-                                step.priority === 3 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : step.priority === 2 ? 'bg-amber-500/10 text-amber-400' : 'bg-slate-800 text-slate-400'
-                              }`}>
-                                P{step.priority}
-                              </span>
-                            </div>
-                            <div className="w-8">
-                              <span className="text-xs font-bold text-slate-300">{step.fill_percentage}%</span>
-                            </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                                  style={step.priority === 3
+                                    ? { background:'rgba(220,38,38,0.12)', color:'#dc2626', border:'1px solid rgba(220,38,38,0.22)' }
+                                    : step.priority === 2
+                                    ? { background:'rgba(217,119,6,0.12)', color:'#d97706', border:'1px solid rgba(217,119,6,0.22)' }
+                                    : { background:'rgba(22,163,74,0.10)', color:'#16a34a', border:'1px solid rgba(22,163,74,0.20)' }}>
+                              P{step.priority}
+                            </span>
+                            <span className="text-xs font-bold w-8 text-right" style={{ color: '#0d4a2f' }}>
+                              {step.fill_percentage}%
+                            </span>
                           </div>
                         </div>
                       ))}
@@ -152,6 +155,18 @@ const RoutePanel = ({ optimalRoute, setOptimalRoute, bins = [] }) => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!optimalRoute && !loading && !error && (
+        <div className="py-8 text-center">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3 animate-float"
+               style={{ background: 'rgba(22,163,74,0.10)', border: '1px solid rgba(22,163,74,0.22)' }}>
+            <MapPin className="w-5 h-5" style={{ color: '#16a34a' }} />
+          </div>
+          <p className="text-sm font-bold mb-1" style={{ color: '#166534' }}>No routes computed yet</p>
+          <p className="text-xs" style={{ color: 'rgba(13,74,47,0.45)' }}>Click Generate to run the VRP optimizer</p>
         </div>
       )}
     </div>

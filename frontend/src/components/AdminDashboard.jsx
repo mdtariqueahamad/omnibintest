@@ -3,219 +3,202 @@ import Sidebar from './Sidebar';
 import AnalyticsCards from './AnalyticsCards';
 import MapView from './MapView';
 import RoutePanel from './RoutePanel';
-import { fetchBins, fetchBinHistory, seedBins, randomizeBins, fetchOptimalRoute, fetchConfig } from '../services/api';
-import { Sparkles, X, Activity, Server, Dices, Filter, Settings } from 'lucide-react';
 import AIChatWidget from './AIChatWidget';
 import FleetConfigModal from './FleetConfigModal';
+import { fetchBins, fetchBinHistory, seedBins, randomizeBins, fetchOptimalRoute, fetchConfig } from '../services/api';
+import { Sparkles, X, Activity, Server, Dices, Filter, Settings, Leaf, Recycle } from 'lucide-react';
 
 function AdminDashboard() {
-  const [bins, setBins] = useState([]);
-  const [optimalRoute, setOptimalRoute] = useState(null);
-  const [selectedBin, setSelectedBin] = useState(null);
-  const [binHistory, setBinHistory] = useState(null);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [isConnected, setIsConnected] = useState(true);
-  const [seeding, setSeeding] = useState(false);
-  const [randomizing, setRandomizing] = useState(false);
-  const [selectedVan, setSelectedVan] = useState('ALL');
-  const [config, setConfig] = useState(null);
+  const [bins,              setBins]              = useState([]);
+  const [optimalRoute,      setOptimalRoute]      = useState(null);
+  const [selectedBin,       setSelectedBin]       = useState(null);
+  const [binHistory,        setBinHistory]        = useState(null);
+  const [historyLoading,    setHistoryLoading]    = useState(false);
+  const [activeTab,         setActiveTab]         = useState('dashboard');
+  const [isConnected,       setIsConnected]       = useState(true);
+  const [seeding,           setSeeding]           = useState(false);
+  const [randomizing,       setRandomizing]       = useState(false);
+  const [selectedVan,       setSelectedVan]       = useState('ALL');
+  const [config,            setConfig]            = useState(null);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
 
-  // Background polling interval checking /api/bins status every 5 seconds
+  // ── Polling ──────────────────────────────────────────────────────
   useEffect(() => {
-    const loadBinsData = async () => {
-      try {
-        const data = await fetchBins();
-        setBins(data);
-        setIsConnected(true);
-      } catch (err) {
-        setIsConnected(false);
-      }
+    const load = async () => {
+      try { setBins(await fetchBins()); setIsConnected(true); }
+      catch { setIsConnected(false); }
     };
-
-    // Execute first instant call
-    loadBinsData();
-
-    // Fetch dynamic fleet configuration
+    load();
     fetchConfig().then(setConfig).catch(console.error);
-
-    // Trigger interval loop
-    const interval = setInterval(loadBinsData, 5000);
-    return () => clearInterval(interval);
+    const iv = setInterval(load, 5000);
+    return () => clearInterval(iv);
   }, []);
 
-  // Monitor selected node interactions to trigger secondary log loads
   useEffect(() => {
-    if (!selectedBin) {
-      setBinHistory(null);
-      return;
-    }
-
-    const loadHistory = async () => {
+    if (!selectedBin) { setBinHistory(null); return; }
+    const load = async () => {
       setHistoryLoading(true);
-      try {
-        const data = await fetchBinHistory(selectedBin.bin_id);
-        setBinHistory(data?.history || []);
-      } catch (err) {
-        setBinHistory([]);
-      } finally {
-        setHistoryLoading(false);
-      }
+      try { setBinHistory((await fetchBinHistory(selectedBin.bin_id))?.history || []); }
+      catch { setBinHistory([]); }
+      finally { setHistoryLoading(false); }
     };
-
-    loadHistory();
+    load();
   }, [selectedBin]);
 
-  // Seed sample database nodes utility hook
-  const handleSeedDatabase = async () => {
+  // ── Actions ──────────────────────────────────────────────────────
+  const handleSeed = async () => {
     setSeeding(true);
-    try {
-      const seeded = await seedBins();
-      setBins(seeded);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSeeding(false);
-    }
+    try { setBins(await seedBins()); }
+    catch (e) { console.error(e); }
+    finally { setSeeding(false); }
   };
 
-  const handleRandomizeData = async () => {
+  const handleRandomize = async () => {
     setRandomizing(true);
     try {
       await randomizeBins();
-      const newBins = await fetchBins();
-      setBins(newBins);
-      // Recalculate routes immediately to reflect new state
-      const newRoute = await fetchOptimalRoute();
-      setOptimalRoute(newRoute);
-      setSelectedVan('ALL'); // Reset filter
-    } catch (err) {
-      console.error("Error randomizing data:", err);
-    } finally {
-      setRandomizing(false);
-    }
+      setBins(await fetchBins());
+      setOptimalRoute(await fetchOptimalRoute());
+      setSelectedVan('ALL');
+    } catch (e) { console.error(e); }
+    finally { setRandomizing(false); }
   };
 
   const handleConfigSaved = async () => {
-    try {
-      // Recalculate routes immediately using new configuration constraints
-      const newRoute = await fetchOptimalRoute();
-      setOptimalRoute(newRoute);
-      setSelectedVan('ALL');
-    } catch (err) {
-      console.error("Error refreshing routes post-config save:", err);
-    }
+    try { setOptimalRoute(await fetchOptimalRoute()); setSelectedVan('ALL'); }
+    catch (e) { console.error(e); }
   };
 
+  // ── Status colour helpers ─────────────────────────────────────────
+  const statusChip = s => {
+    if (s === 'Critical')         return 'chip-critical';
+    if (s === 'Needs Collection') return 'chip-warn';
+    return 'chip-ok';
+  };
+
+  // ── Page title section ────────────────────────────────────────────
+  const PageHeader = ({ title, sub }) => (
+    <div className="mb-5">
+      <div className="flex items-center gap-2 mb-1">
+        <Leaf className="w-3.5 h-3.5" style={{ color: '#16a34a' }} />
+        <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#16a34a' }}>
+          Live Intelligence
+        </span>
+      </div>
+      <h1 className="text-2xl font-black" style={{ color: '#0d4a2f' }}>{title}</h1>
+      <p className="text-xs mt-0.5" style={{ color: 'rgba(13,74,47,0.50)' }}>{sub}</p>
+    </div>
+  );
+
   return (
-    <div className="flex min-h-screen bg-[#0b0f19] text-slate-100 selection:bg-cyan-500 selection:text-slate-950">
-      {/* Decoupled Side Navigation Layout */}
+    <div className="flex min-h-screen relative">
+      {/* Nature background fixed layer */}
+      <div className="nature-bg" />
+
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isConnected={isConnected} />
 
-      {/* Main Orchestrator Canvas Workspace */}
-      <main className="flex-1 p-6 lg:p-8 max-w-7xl mx-auto w-full overflow-y-auto">
-        {/* Helper Banner for clean out-of-the-box demonstration deployment */}
+      <main className="flex-1 p-5 lg:p-7 overflow-y-auto relative z-10">
+
+        {/* ── Zero-bins banner ─────────────────────────────────── */}
         {bins.length === 0 && isConnected && (
-          <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-blue-950/60 via-slate-900/80 to-slate-950 border border-blue-500/20 flex flex-col sm:flex-row items-center justify-between gap-4 glass-card">
-            <div className="flex items-center gap-3.5 text-left">
-              <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-400 shrink-0">
-                <Server className="w-5 h-5" />
+          <div className="mb-5 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in glass-card">
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                   style={{ background:'rgba(13,148,136,0.12)', border:'1px solid rgba(13,148,136,0.25)' }}>
+                <Server className="w-5 h-5" style={{ color:'#0d9488' }} />
               </div>
               <div>
-                <h3 className="font-bold text-sm text-white">Zero Active Nodes Monitored</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Click below to automatically populate simulated SF smart container mock parameters.</p>
+                <h3 className="font-bold text-sm" style={{ color:'#0d4a2f' }}>Zero Active Nodes</h3>
+                <p className="text-xs mt-0.5" style={{ color:'rgba(13,74,47,0.50)' }}>
+                  Seed the database to populate test bins and get started.
+                </p>
               </div>
             </div>
-            <button
-              onClick={handleSeedDatabase}
-              disabled={seeding}
-              className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-blue-500/20 shrink-0 flex items-center gap-2 cursor-pointer active:scale-95"
-            >
+            <button id="seed-database-btn" onClick={handleSeed} disabled={seeding}
+                    className="btn-primary shrink-0 rounded-xl py-2.5 px-4 text-xs">
               <Sparkles className="w-3.5 h-3.5" />
-              {seeding ? 'Seeding Gateway...' : 'Seed Testing Fleet'}
+              {seeding ? 'Seeding...' : 'Seed Testing Fleet'}
             </button>
           </div>
         )}
 
-        {/* Live Active Overview Matrix Dashboard */}
+        {/* ── DASHBOARD tab ────────────────────────────────────── */}
         {activeTab === 'dashboard' && (
-          <div className="space-y-6 animate-fade-in">
-            {/* Header branding block */}
-            <div className="text-left mb-2 flex flex-col md:flex-row md:items-end justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-black text-white tracking-tight">Fleet Real-Time Core</h1>
-                <p className="text-xs text-slate-400 mt-0.5">Automated telemetry streams mapping continuous live ESP32 status updates</p>
-              </div>
-              
-              {/* Top Control Bar */}
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-1.5 glass-card">
-                  <Filter className="w-4 h-4 text-slate-400" />
-                  <select 
-                    value={selectedVan} 
-                    onChange={(e) => setSelectedVan(e.target.value)}
-                    className="bg-transparent text-xs font-bold text-slate-200 outline-none cursor-pointer focus:ring-0 min-w-[120px]"
+          <div className="space-y-5 animate-fade-in">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <PageHeader
+                title="Fleet Real-Time Core"
+                sub="Live ESP32 telemetry streams — automated bin-level monitoring"
+              />
+              {/* Controls */}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {/* Van filter */}
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl glass-card">
+                  <Filter className="w-3.5 h-3.5" style={{ color:'rgba(13,74,47,0.45)' }} />
+                  <select
+                    id="van-filter"
+                    value={selectedVan}
+                    onChange={e => setSelectedVan(e.target.value)}
+                    className="bg-transparent text-xs font-bold outline-none cursor-pointer min-w-[110px]"
+                    style={{ color:'#0d4a2f' }}
                   >
-                    <option value="ALL" className="bg-slate-900 text-white">Show All Fleet</option>
-                    {optimalRoute?.fleet_routes?.map((route) => (
-                      <option key={route.van_id} value={route.van_id.toString()} className="bg-slate-900 text-white">
-                        Van {route.van_id} Route
-                      </option>
+                    <option value="ALL">Show All Fleet</option>
+                    {optimalRoute?.fleet_routes?.map(r => (
+                      <option key={r.van_id} value={r.van_id.toString()}>Van {r.van_id}</option>
                     ))}
                   </select>
                 </div>
-                
-                <button 
-                  onClick={handleRandomizeData}
-                  disabled={randomizing}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-200 font-bold text-xs rounded-xl transition-all shadow-lg flex items-center gap-2 cursor-pointer active:scale-95 whitespace-nowrap"
-                >
-                  <Dices className={`w-4 h-4 text-amber-400 ${randomizing ? 'animate-spin' : ''}`} />
-                  {randomizing ? 'Simulating...' : 'Randomize Fill Levels'}
+
+                <button id="randomize-btn" onClick={handleRandomize} disabled={randomizing}
+                        className="btn-glass rounded-xl text-xs">
+                  <Dices className={`w-3.5 h-3.5 ${randomizing ? 'animate-spin' : ''}`}
+                         style={{ color:'#d97706' }} />
+                  {randomizing ? 'Simulating...' : 'Randomize Fill'}
                 </button>
 
-                <button
-                  onClick={() => setIsConfigModalOpen(true)}
-                  className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white rounded-xl transition-all shadow-lg cursor-pointer active:scale-95"
-                  title="Dynamic Fleet Configuration"
-                >
-                  <Settings className="w-4 h-4 text-cyan-400 hover:rotate-45 transition-transform duration-300" />
+                <button id="fleet-config-btn"
+                        onClick={() => setIsConfigModalOpen(true)}
+                        className="w-9 h-9 rounded-xl flex items-center justify-center transition-all glass-card hover:scale-105"
+                        title="Fleet Configuration">
+                  <Settings className="w-4 h-4" style={{ color:'#0d9488' }} />
                 </button>
               </div>
             </div>
 
-            {/* Status Analytics summary layers */}
             <AnalyticsCards bins={bins} />
 
-            {/* Split workspace view layout: Left canvas for Maps, Right panel for route management */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               <div className="lg:col-span-2">
                 <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} />
               </div>
-              <div className="lg:col-span-1 flex flex-col gap-6">
+              <div className="lg:col-span-1 flex flex-col gap-5">
                 <RoutePanel optimalRoute={optimalRoute} setOptimalRoute={setOptimalRoute} bins={bins} />
-                
-                {/* Instant focus alert block mapping critical state hubs */}
-                <div className="glass-panel rounded-2xl p-4 border border-slate-800 text-left flex-1 flex flex-col">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-rose-500 animate-pulse" /> Urgent Outage Hubs
+
+                {/* Critical hubs panel */}
+                <div className="glass-panel rounded-2xl p-4 text-left flex flex-col">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-2"
+                      style={{ color:'rgba(13,74,47,0.50)' }}>
+                    <Activity className="w-3.5 h-3.5 animate-pulse" style={{ color:'#dc2626' }} />
+                    Urgent Outage Hubs
                   </h3>
                   {bins.filter(b => b.status === 'Critical').length === 0 ? (
-                    <div className="text-xs text-slate-500 italic p-4 bg-slate-900/40 rounded-xl border border-slate-800/50 text-center flex-1 flex items-center justify-center">
-                      Zero hardware capacity overflows logged.
+                    <div className="flex-1 flex items-center justify-center py-5 rounded-xl text-center"
+                         style={{ background:'rgba(22,163,74,0.06)', border:'1px solid rgba(22,163,74,0.16)' }}>
+                      <p className="text-xs" style={{ color:'rgba(13,74,47,0.45)' }}>
+                        ✓ No overflows detected
+                      </p>
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1.5">
+                    <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
                       {bins.filter(b => b.status === 'Critical').map(b => (
-                        <div key={b.bin_id} onClick={() => setSelectedBin(b)} className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-between cursor-pointer hover:bg-rose-500/15 transition-all">
+                        <div key={b.bin_id} onClick={() => setSelectedBin(b)}
+                             className="p-2.5 rounded-xl flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01]"
+                             style={{ background:'rgba(254,226,226,0.50)', border:'1px solid rgba(239,68,68,0.20)' }}>
                           <div className="truncate pr-2">
-                            <p className="text-xs font-bold text-white truncate">{b.location}</p>
-                            <p className="text-[9px] text-rose-400 font-mono">{b.bin_id}</p>
+                            <p className="text-xs font-bold truncate" style={{ color:'#7f1d1d' }}>{b.location}</p>
+                            <p className="text-[9px] font-mono" style={{ color:'rgba(127,29,29,0.60)' }}>{b.bin_id}</p>
                           </div>
-                          <span className="text-xs font-black text-rose-400 bg-rose-500/20 px-1.5 py-0.5 rounded shrink-0">
-                            {b.fill_percentage}%
-                          </span>
+                          <span className="chip-critical shrink-0">{b.fill_percentage}%</span>
                         </div>
                       ))}
                     </div>
@@ -226,43 +209,38 @@ function AdminDashboard() {
           </div>
         )}
 
-        {/* Fullscreen interactive Map interface */}
+        {/* ── MAP tab ──────────────────────────────────────────── */}
         {activeTab === 'map' && (
-          <div className="space-y-4 animate-fade-in text-left">
-            <div>
-              <h2 className="text-xl font-bold text-white">Expanded Cartography Matrix</h2>
-              <p className="text-xs text-slate-400">Click container markers to analyze volume properties and active priority rules</p>
-            </div>
+          <div className="space-y-4 animate-fade-in">
+            <PageHeader title="Expanded Cartography Matrix" sub="Click container markers to analyze volume properties" />
             <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} />
           </div>
         )}
 
-        {/* Dedicated Combinatorial Routing view */}
+        {/* ── ROUTES tab ───────────────────────────────────────── */}
         {activeTab === 'routes' && (
-          <div className="space-y-6 animate-fade-in text-left max-w-2xl mx-auto">
-            <div>
-              <h2 className="text-xl font-bold text-white">NetworkX Optimizer Sandbox</h2>
-              <p className="text-xs text-slate-400">Evaluate dynamic edge limits and shortest metrics calculated from the depot</p>
-            </div>
+          <div className="space-y-5 animate-fade-in max-w-2xl mx-auto">
+            <PageHeader title="NetworkX Optimizer Sandbox" sub="Evaluate dynamic edge limits and shortest-path metrics from the depot" />
             <RoutePanel optimalRoute={optimalRoute} setOptimalRoute={setOptimalRoute} bins={bins} />
           </div>
         )}
 
-        {/* Central Analytics time-series list preview */}
+        {/* ── HISTORY tab ─────────────────────────────────────── */}
         {activeTab === 'history' && (
-          <div className="space-y-4 animate-fade-in text-left">
-            <div>
-              <h2 className="text-xl font-bold text-white">Telemetry Database Audit Logs</h2>
-              <p className="text-xs text-slate-400">Historical records of device payload syncs persisted asynchronously into MongoDB</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {bins.map((b) => (
-                <div key={b.bin_id} onClick={() => setSelectedBin(b)} className="glass-card p-4 rounded-xl cursor-pointer hover:border-blue-500/40 flex items-center justify-between">
+          <div className="space-y-4 animate-fade-in">
+            <PageHeader title="Telemetry Audit Logs" sub="Historical records asynchronously persisted to MongoDB" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {bins.map(b => (
+                <div key={b.bin_id} onClick={() => setSelectedBin(b)}
+                     className="glass-card p-4 rounded-xl cursor-pointer flex items-center justify-between">
                   <div>
-                    <p className="font-bold text-sm text-white">{b.location}</p>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">Node: {b.bin_id}</p>
+                    <p className="font-bold text-sm" style={{ color:'#0d4a2f' }}>{b.location}</p>
+                    <p className="text-xs font-mono mt-0.5" style={{ color:'rgba(13,74,47,0.45)' }}>Node: {b.bin_id}</p>
                   </div>
-                  <span className="text-xs font-semibold text-blue-400 underline shrink-0">Inspect Timeline &rarr;</span>
+                  <div className="flex items-center gap-2">
+                    <span className={statusChip(b.status)}>{b.status}</span>
+                    <span className="text-xs font-semibold" style={{ color:'#0d9488' }}>View →</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -270,78 +248,102 @@ function AdminDashboard() {
         )}
       </main>
 
-      {/* Analytics Drilldown Interactive Overlays Modal */}
+      {/* ── Bin detail modal ──────────────────────────────────── */}
       {selectedBin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="glass-panel w-full max-w-lg rounded-2xl overflow-hidden border border-slate-700 shadow-2xl text-left flex flex-col max-h-[85vh]">
-            {/* Modal header banner */}
-            <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-              <div>
-                <span className="text-[9px] font-bold text-cyan-400 uppercase tracking-wider block">IoT Sensor Logbook</span>
-                <h3 className="font-bold text-sm text-white">{selectedBin.location}</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
+             style={{ background:'rgba(13,74,47,0.30)', backdropFilter:'blur(10px)' }}>
+          <div className="glass-panel w-full max-w-lg rounded-3xl overflow-hidden flex flex-col max-h-[85vh] animate-scale-in"
+               style={{ boxShadow:'0 24px 80px rgba(13,74,47,0.20)' }}>
+            {/* Modal header */}
+            <div className="px-5 py-4 flex items-center justify-between shrink-0"
+                 style={{ borderBottom:'1px solid rgba(255,255,255,0.45)', background:'rgba(255,255,255,0.20)' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                     style={{ background:'rgba(22,163,74,0.12)', border:'1px solid rgba(22,163,74,0.25)' }}>
+                  <Recycle className="w-4 h-4" style={{ color:'#16a34a' }} />
+                </div>
+                <div>
+                  <span className="text-[9px] font-black uppercase tracking-widest" style={{ color:'#0d9488' }}>IoT Sensor Logbook</span>
+                  <h3 className="font-bold text-sm" style={{ color:'#0d4a2f' }}>{selectedBin.location}</h3>
+                </div>
               </div>
-              <button onClick={() => setSelectedBin(null)} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0">
+              <button id="close-bin-modal" onClick={() => setSelectedBin(null)}
+                      className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-white/50 transition-colors"
+                      style={{ color:'rgba(13,74,47,0.50)' }}>
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Modal internal metrics */}
-            <div className="p-4 overflow-y-auto flex-1 space-y-4">
-              <div className="grid grid-cols-3 gap-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 text-center text-xs">
-                <div>
-                  <span className="text-[9px] text-slate-500 block">Current Saturation</span>
-                  <span className="font-extrabold text-white">{selectedBin.fill_percentage}%</span>
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-500 block">Dispatch Level</span>
-                  <span className="font-extrabold text-white">Tier {selectedBin.priority}</span>
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-500 block">Status State</span>
-                  <span className={`font-bold text-[11px] ${selectedBin.status === 'Critical' ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`}>
-                    {selectedBin.status}
-                  </span>
-                </div>
+            <div className="p-5 overflow-y-auto flex-1 space-y-4">
+              {/* Stats row */}
+              <div className="grid grid-cols-3 gap-2 p-3 rounded-xl text-center"
+                   style={{ background:'rgba(255,255,255,0.50)', border:'1px solid rgba(255,255,255,0.65)' }}>
+                {[
+                  { label:'Saturation',    value:`${selectedBin.fill_percentage}%`, color:'#0d4a2f' },
+                  { label:'Priority Tier', value:`Tier ${selectedBin.priority}`,    color:'#0d9488' },
+                  { label:'Status',        value:selectedBin.status, color: selectedBin.status==='Critical' ? '#dc2626' : '#16a34a' },
+                ].map(m => (
+                  <div key={m.label}>
+                    <span className="text-[9px] block mb-1" style={{ color:'rgba(13,74,47,0.40)' }}>{m.label}</span>
+                    <span className="font-black text-sm" style={{ color:m.color }}>{m.value}</span>
+                  </div>
+                ))}
               </div>
 
-              {/* Log Timeline block */}
-              <div>
-                <h4 className="text-xs font-semibold text-slate-400 mb-2.5 flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5 text-blue-400" /> Historic Storage Logs
-                </h4>
-                
-                {historyLoading ? (
-                  <div className="p-8 text-center text-xs text-slate-500 italic">
-                    Retrieving time-series bounds from database...
-                  </div>
-                ) : binHistory && binHistory.length > 0 ? (
-                  <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1.5">
-                    {binHistory.map((item, index) => {
-                      const d = new Date(item.timestamp);
-                      const timeFormatted = isNaN(d.getTime()) ? item.timestamp : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                      const dateFormatted = isNaN(d.getTime()) ? '' : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+              {/* Fill bar */}
+              <div className="w-full h-2 rounded-full overflow-hidden"
+                   style={{ background:'rgba(13,74,47,0.10)' }}>
+                <div className="h-full rounded-full transition-all duration-700"
+                     style={{
+                       width:`${Math.min(selectedBin.fill_percentage,100)}%`,
+                       background: selectedBin.fill_percentage > 80
+                         ? 'linear-gradient(90deg,#f59e0b,#dc2626)'
+                         : 'linear-gradient(90deg,#16a34a,#0d9488)'
+                     }} />
+              </div>
 
+              {/* Log timeline */}
+              <div>
+                <h4 className="text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-1.5"
+                    style={{ color:'rgba(13,74,47,0.50)' }}>
+                  <Activity className="w-3.5 h-3.5" style={{ color:'#0d9488' }} />
+                  Historical Storage Logs
+                </h4>
+                {historyLoading ? (
+                  <p className="py-6 text-center text-xs italic" style={{ color:'rgba(13,74,47,0.40)' }}>
+                    Loading time-series data...
+                  </p>
+                ) : binHistory?.length > 0 ? (
+                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                    {binHistory.map((item, i) => {
+                      const d    = new Date(item.timestamp);
+                      const time = isNaN(d.getTime()) ? item.timestamp : d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+                      const date = isNaN(d.getTime()) ? '' : d.toLocaleDateString([], { month:'short', day:'numeric' });
                       return (
-                        <div key={index} className="p-2.5 rounded-xl bg-slate-900/40 border border-slate-800/80 flex items-center justify-between text-xs">
-                          <div className="text-left pr-2">
-                            <span className="font-mono text-[10px] text-slate-300 block">{timeFormatted}</span>
-                            <span className="text-[9px] text-slate-500 block">{dateFormatted}</span>
+                        <div key={i} className="p-2.5 rounded-xl flex items-center justify-between text-xs"
+                             style={{ background:'rgba(255,255,255,0.48)', border:'1px solid rgba(255,255,255,0.65)' }}>
+                          <div>
+                            <span className="font-mono text-[10px] block" style={{ color:'#0d4a2f' }}>{time}</span>
+                            <span className="text-[9px]" style={{ color:'rgba(13,74,47,0.45)' }}>{date}</span>
                           </div>
-                          
-                          {/* Progress volume indicator */}
-                          <div className="flex items-center gap-2.5 w-32 justify-end shrink-0">
-                            <div className="w-16 bg-slate-800 rounded-full h-1 overflow-hidden">
-                              <div className={`h-full rounded-full ${item.fill_percentage > 80 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(item.fill_percentage, 100)}%` }}></div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <div className="w-16 h-1.5 rounded-full overflow-hidden"
+                                 style={{ background:'rgba(13,74,47,0.10)' }}>
+                              <div className="h-full rounded-full"
+                                   style={{ width:`${Math.min(item.fill_percentage,100)}%`,
+                                            background: item.fill_percentage > 80 ? '#dc2626' : '#16a34a' }} />
                             </div>
-                            <span className="font-bold text-slate-100 text-right w-8">{item.fill_percentage}%</span>
+                            <span className="font-bold w-8 text-right" style={{ color:'#0d4a2f' }}>
+                              {item.fill_percentage}%
+                            </span>
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-600 italic p-4 text-center bg-slate-900/30 rounded-xl">
-                    Zero timeline archives saved for this hardware token.
+                  <p className="text-xs italic py-4 text-center" style={{ color:'rgba(13,74,47,0.35)' }}>
+                    No archive records for this hardware token.
                   </p>
                 )}
               </div>
@@ -350,10 +352,7 @@ function AdminDashboard() {
         </div>
       )}
 
-      {/* Persistent AI Assistant Widget Overlay */}
       <AIChatWidget />
-
-      {/* Dynamic Settings Configuration Drawer Modal overlay */}
       <FleetConfigModal
         isOpen={isConfigModalOpen}
         onClose={() => setIsConfigModalOpen(false)}
