@@ -30,6 +30,26 @@ export const fetchOptimalRoute = async (mode = 'static') => {
   }
 };
 
+export const fetchPredictedBins = async (hoursAhead = 12) => {
+  try {
+    const response = await apiClient.get(`/api/bins/predict_all/batch?hours_ahead=${hoursAhead}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching predicted bins:", error);
+    throw error;
+  }
+};
+
+export const fetchPredictedRoute = async (hoursAhead = 12, mode = 'static') => {
+  try {
+    const response = await apiClient.get(`/api/routes/predict?hours_ahead=${hoursAhead}&mode=${mode}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error calculating predicted route:", error);
+    throw error;
+  }
+};
+
 export const setOperatorLive = async (operatorId, lat, lon) => {
   const res = await apiClient.put(`/api/operators/${operatorId}/live`, { latitude: lat, longitude: lon });
   return res.data;

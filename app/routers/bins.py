@@ -1,7 +1,8 @@
-from typing import List
+from typing import List, Dict, Any
 from fastapi import APIRouter, HTTPException, status
-from app.models import BinCreate, BinResponse, BinHistoryResponse, RouteResponse, FleetConfig
+from app.models import BinCreate, BinResponse, BinHistoryResponse, RouteResponse, FleetConfig, BinPrediction, SeedHistoryRequest
 from app.services import bin_service, routing, config_service
+from app.services.prediction import predict_future_fill_level
 
 router = APIRouter(tags=["Waste Management"])
 
@@ -65,6 +66,36 @@ def get_optimal_collection_route(mode: str = "static"):
     return routing.calculate_optimal_route(mode=mode)
 
 
+@router.get("/api/routes/predict", response_model=RouteResponse)
+def get_predicted_collection_route(hours_ahead: int = 12, mode: str = "static"):
+    """
+    Calculate and return the optimized waste collection route based on future predicted fill levels.
+    """
+    return routing.calculate_optimal_route(mode=mode, predict_hours=hours_ahead)
+
+
+@router.get("/api/bins/{bin_id}/predict", response_model=BinPrediction)
+def get_bin_prediction(bin_id: str, hours_ahead: int = 12):
+    """Predict the future fill level of a specific bin."""
+    b = bin_service.get_bin_by_id(bin_id)
+    if not b:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dustbin with ID '{bin_id}' not found.",
+        )
+    return predict_future_fill_level(bin_id, hours_ahead)
+
+
+@router.get("/api/bins/predict_all/batch", response_model=List[BinPrediction])
+def get_all_bins_prediction(hours_ahead: int = 12):
+    """Predict the future fill level of all bins."""
+    all_bins = bin_service.get_all_bins()
+    predictions = []
+    for b in all_bins:
+        predictions.append(predict_future_fill_level(b["bin_id"], hours_ahead))
+    return predictions
+
+
 @router.post("/api/bins/seed", response_model=List[BinResponse])
 def seed_database():
     """
@@ -72,6 +103,14 @@ def seed_database():
     for testing the routing engine immediately.
     """
     return bin_service.seed_initial_bins()
+
+
+@router.post("/api/bins/seed_history", response_model=Dict[str, Any])
+def seed_database_history(request: SeedHistoryRequest):
+    """
+    Seed the database with synthetic time-series historical data for ML model training.
+    """
+    return bin_service.seed_bin_history(request.bin_ids, request.hours)
 
 
 @router.post("/api/bins/randomize")

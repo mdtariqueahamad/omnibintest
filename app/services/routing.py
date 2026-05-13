@@ -192,7 +192,7 @@ def _calculate_networkx_fallback_route(start_node: Dict[str, Any], target_bins: 
     }
 
 
-def calculate_optimal_route(mode: str = "static") -> Dict[str, Any]:
+def calculate_optimal_route(mode: str = "static", predict_hours: int = 0) -> Dict[str, Any]:
     # Fetch dynamic routing constraints from DB
     config = config_service.get_fleet_config()
     van_capacity = float(config.get("van_capacity", 500.0))
@@ -205,9 +205,23 @@ def calculate_optimal_route(mode: str = "static") -> Dict[str, Any]:
     target_bins = []
     total_volume = 0.0
     for b in all_bins:
-        fill = b.get("fill_percentage", 0.0)
+        if predict_hours > 0:
+            from app.services.prediction import predict_future_fill_level
+            prediction = predict_future_fill_level(b["bin_id"], predict_hours)
+            fill = prediction.predicted_fill_percentage
+            b["fill_percentage"] = fill
+            if fill >= 80.0:
+                status = "Critical"
+            elif fill >= 50.0:
+                status = "Needs Collection"
+            else:
+                status = "OK"
+            b["status"] = status
+        else:
+            fill = b.get("fill_percentage", 0.0)
+            status = b.get("status", "OK")
+            
         prio = b.get("priority", 1)
-        status = b.get("status", "OK")
         cap = b.get("capacity", 100.0)
 
         if fill >= 70.0 or status in ["Needs Collection", "Critical"] or (prio == 3 and fill >= 50.0):

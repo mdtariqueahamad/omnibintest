@@ -1,7 +1,11 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, Field
+
+
+class SeedHistoryRequest(BaseModel):
+    bin_ids: List[str] = Field(..., description="List of bin IDs to seed history for")
+    hours: int = Field(48, description="Hours of history to generate")
 
 
 class BinBase(BaseModel):
@@ -34,6 +38,18 @@ class BinHistoryItem(BaseModel):
 class BinHistoryResponse(BaseModel):
     bin_id: str
     history: List[BinHistoryItem]
+
+
+class BinPrediction(BaseModel):
+    bin_id: str = Field(..., description="Unique hardware identifier for the bin")
+    predicted_fill_percentage: float = Field(..., description="Predicted fill level percentage")
+    error_rate_high: bool = Field(..., description="True if prediction has high uncertainty due to low data")
+    data_points_used: int = Field(..., description="Number of historical data points used for prediction")
+    target_future_timestamp: str = Field(..., description="ISO timestamp of the predicted future state")
+
+
+class PredictedRouteRequest(BaseModel):
+    hours_ahead: int = Field(12, description="Hours in the future to predict the route for")
 
 
 class RouteStep(BaseModel):

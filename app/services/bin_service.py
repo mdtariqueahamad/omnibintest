@@ -240,3 +240,54 @@ def randomize_all_bins() -> None:
             "fill_percentage": new_fill,
             "confidence_percent": confidence_percent
         })
+
+
+from datetime import timedelta
+
+def seed_bin_history(bin_ids: List[str], hours: int = 48) -> Dict[str, Any]:
+    """Seed synthetic history for a list of bins to aid in ML prediction testing."""
+    now = datetime.now(timezone.utc)
+    seeded_count = 0
+    
+    for bin_id in bin_ids:
+        # Clear existing history for clean seeding
+        history_collection.delete_many({"bin_id": bin_id})
+        
+        # We simulate a steady increase over `hours`
+        fill_level = random.uniform(5.0, 15.0)
+        fill_rate_per_hour = random.uniform(1.0, 3.5)
+        
+        history_docs = []
+        for h in range(hours, -1, -1):
+            past_time = now - timedelta(hours=h)
+            
+            # Reset if it hits 100
+            if fill_level > 95.0:
+                fill_level = random.uniform(0.0, 5.0)
+                
+            history_docs.append({
+                "bin_id": bin_id,
+                "timestamp": past_time.isoformat(),
+                "fill_percentage": round(fill_level, 2),
+                "confidence_percent": 100.0
+            })
+            
+            # Add normal growth
+            fill_level += fill_rate_per_hour + random.uniform(-0.5, 0.5)
+            
+        if history_docs:
+            history_collection.insert_many(history_docs)
+            seeded_count += len(history_docs)
+            
+            # Update the main bin record to match the last history state
+            last_state = history_docs[-1]
+            bins_collection.update_one(
+                {"bin_id": bin_id},
+                {"$set": {
+                    "fill_percentage": last_state["fill_percentage"],
+                    "last_updated": last_state["timestamp"]
+                }}
+            )
+            
+    return {"message": f"Successfully seeded {seeded_count} historical records across {len(bin_ids)} bins."}
+
