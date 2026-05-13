@@ -439,7 +439,18 @@ def seed_initial_bins() -> List[Dict[str, Any]]:
             "priority": 3,
             "fill_percentage": 25.0,
             "status": "OK",
+        },
+        {
+            "bin_id": "bin_036",
+            "location": "BIST-Dustbin",
+            "latitude": 23.2711,
+            "longitude": 77.5111,
+            "capacity": 80.0,
+            "priority": 3,
+            "fill_percentage": 25.0,
+            "status": "OK",
         }
+
     ]
 
     seeded = []
