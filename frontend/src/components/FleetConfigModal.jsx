@@ -1,156 +1,118 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, X, Save, RefreshCw } from 'lucide-react';
+import { Settings, X, Save, RefreshCw, Truck, Fuel, DollarSign } from 'lucide-react';
 import { updateConfig } from '../services/api';
 
 const FleetConfigModal = ({ isOpen, onClose, config, setConfig, onSaveSuccess }) => {
-  const [formData, setFormData] = useState({
-    van_capacity: 500.0,
-    mileage_kmpl: 5.5,
-    fuel_price: 95.0,
-  });
+  const [form,   setForm]   = useState({ van_capacity: 500.0, mileage_kmpl: 5.5, fuel_price: 95.0 });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+  const [error,  setError]  = useState(null);
 
   useEffect(() => {
-    if (config) {
-      setFormData({
-        van_capacity: config.van_capacity ?? 500.0,
-        mileage_kmpl: config.mileage_kmpl ?? 5.5,
-        fuel_price: config.fuel_price ?? 95.0,
-      });
-    }
+    if (config) setForm({
+      van_capacity: config.van_capacity ?? 500.0,
+      mileage_kmpl: config.mileage_kmpl ?? 5.5,
+      fuel_price:   config.fuel_price   ?? 95.0,
+    });
   }, [config]);
 
   if (!isOpen) return null;
 
-  const handleChange = (e) => {
+  const onChange = e => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: parseFloat(value) || 0,
-    }));
+    setForm(p => ({ ...p, [name]: parseFloat(value) || 0 }));
   };
 
-  const handleSave = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
+  const onSave = async e => {
+    e.preventDefault(); setSaving(true); setError(null);
     try {
-      const updated = await updateConfig(formData);
-      setConfig(updated);
-      onSaveSuccess();
-      onClose();
-    } catch (err) {
-      setError('Failed to persist dynamic constraints. Verify network connectivity.');
-    } finally {
-      setSaving(false);
-    }
+      const updated = await updateConfig(form);
+      setConfig(updated); onSaveSuccess(); onClose();
+    } catch { setError('Failed to save. Check network connectivity.'); }
+    finally { setSaving(false); }
   };
+
+  const fields = [
+    { name: 'van_capacity', label: 'Max Van Capacity', unit: 'Liters', icon: Truck,
+      hint: 'Total volume limit per route cluster' },
+    { name: 'mileage_kmpl', label: 'Vehicle Mileage',  unit: 'km/L',  icon: Fuel,
+      hint: 'Used to calculate fuel burn per route segment' },
+    { name: 'fuel_price',   label: 'Fuel Price',       unit: '₹/L',   icon: DollarSign,
+      hint: 'Cost minimization weight in the CVRP optimizer' },
+  ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in text-left">
-      <div className="glass-panel w-full max-w-md rounded-2xl overflow-hidden border border-slate-700 shadow-2xl flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
+         style={{ background: 'rgba(13,74,47,0.30)', backdropFilter: 'blur(12px)' }}>
+      <div className="glass-panel w-full max-w-md rounded-3xl overflow-hidden animate-scale-in"
+           style={{ boxShadow: '0 24px 80px rgba(13,74,47,0.18)' }}>
+
         {/* Header */}
-        <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Settings className="w-4 h-4 text-cyan-400" />
-            <h3 className="font-bold text-sm text-white">Dynamic Fleet Configuration</h3>
+        <div className="px-6 py-4 flex items-center justify-between"
+             style={{ borderBottom: '1px solid rgba(255,255,255,0.45)' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                 style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.25)' }}>
+              <Settings className="w-4 h-4" style={{ color: '#16a34a' }} />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm" style={{ color: '#0d4a2f' }}>Fleet Configuration</h3>
+              <p className="text-[10px]" style={{ color: 'rgba(13,74,47,0.50)' }}>Adjust optimizer constraints</p>
+            </div>
           </div>
           <button
+            id="fleet-config-close"
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-white/50"
+            style={{ color: 'rgba(13,74,47,0.50)' }}
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSave} className="p-5 space-y-4">
+        {/* Form */}
+        <form onSubmit={onSave} className="p-6 space-y-4">
           {error && (
-            <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs">
+            <div className="p-3 rounded-xl text-xs font-medium"
+                 style={{ background: 'rgba(254,226,226,0.60)', border: '1px solid rgba(239,68,68,0.22)', color: '#991b1b' }}>
               {error}
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-              Max Van Capacity (Liters)
-            </label>
-            <input
-              type="number"
-              step="0.1"
-              name="van_capacity"
-              value={formData.van_capacity}
-              onChange={handleChange}
-              required
-              className="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-cyan-500/50 transition-colors"
-            />
-            <span className="text-[10px] text-slate-500 block mt-1">
-              Limits total volume calculated dynamically per route cluster.
-            </span>
-          </div>
+          {fields.map(f => {
+            const Icon = f.icon;
+            return (
+              <div key={f.name}>
+                <label className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest mb-2"
+                       style={{ color: 'rgba(13,74,47,0.55)' }}>
+                  <Icon className="w-3 h-3" />
+                  {f.label}
+                  <span className="font-normal lowercase tracking-normal opacity-60">({f.unit})</span>
+                </label>
+                <input
+                  id={`config-${f.name}`}
+                  type="number"
+                  step="0.1"
+                  name={f.name}
+                  value={form[f.name]}
+                  onChange={onChange}
+                  required
+                  className="eco-input font-bold"
+                />
+                <p className="text-[10px] mt-1" style={{ color: 'rgba(13,74,47,0.38)' }}>{f.hint}</p>
+              </div>
+            );
+          })}
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-              Vehicle Mileage (km/L)
-            </label>
-            <input
-              type="number"
-              step="0.1"
-              name="mileage_kmpl"
-              value={formData.mileage_kmpl}
-              onChange={handleChange}
-              required
-              className="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-cyan-500/50 transition-colors"
-            />
-            <span className="text-[10px] text-slate-500 block mt-1">
-              Used to calculate expected fuel burn metrics per route segment.
-            </span>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-              Fuel Price (₹/L)
-            </label>
-            <input
-              type="number"
-              step="0.1"
-              name="fuel_price"
-              value={formData.fuel_price}
-              onChange={handleChange}
-              required
-              className="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-cyan-500/50 transition-colors"
-            />
-            <span className="text-[10px] text-slate-500 block mt-1">
-              Establishes aggregate cost minimization weights inside the CVRP optimizer.
-            </span>
-          </div>
-
-          {/* Footer Actions */}
-          <div className="pt-3 border-t border-slate-800/80 flex items-center justify-end gap-2.5">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
-            >
+          {/* Actions */}
+          <div className="flex items-center justify-end gap-2.5 pt-2"
+               style={{ borderTop: '1px solid rgba(255,255,255,0.45)' }}>
+            <button type="button" onClick={onClose} className="btn-glass px-4 py-2.5 rounded-xl text-xs">
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-1.5 cursor-pointer active:scale-95"
-            >
-              {saving ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Applying...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="w-3.5 h-3.5" />
-                  <span>Save Config</span>
-                </>
-              )}
+            <button type="submit" disabled={saving} className="btn-primary px-4 py-2.5 rounded-xl text-xs">
+              {saving
+                ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Saving...</>
+                : <><Save className="w-3.5 h-3.5" /> Save Config</>}
             </button>
           </div>
         </form>

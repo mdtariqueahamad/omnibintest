@@ -1,34 +1,16 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 
 const ThemeContext = createContext();
 
+// Always light — eco glassmorphism theme only
 export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState(() => {
-    // Check localStorage or default to dark
-    const savedTheme = localStorage.getItem('omnibin_theme');
-    if (savedTheme) {
-      return savedTheme;
-    }
-    return 'dark'; // default to dark since app was previously dark-heavy
-  });
-
   useEffect(() => {
-    // Update local storage
-    localStorage.setItem('omnibin_theme', theme);
-    // Add/remove dark class on root html element
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
-  };
+    // Always remove dark mode for the new light eco design
+    document.documentElement.classList.remove('dark');
+  }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme: 'light' }}>
       {children}
     </ThemeContext.Provider>
   );

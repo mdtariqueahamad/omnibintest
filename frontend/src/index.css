@@ -1,78 +1,326 @@
 @import "leaflet/dist/leaflet.css";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Nunito:wght@400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Premium global design system & custom tailored dark mode */
+/* ═══════════════════════════════════════════════════
+   OMNIBIN — LIGHT ECO GLASSMORPHISM DESIGN SYSTEM
+   Inspired by: nature-immersed smart city aesthetic
+   Palette: mint-white glass on lush green world
+   ═══════════════════════════════════════════════════ */
+
+:root {
+  /* Eco palette */
+  --g-deep:    #0d4a2f;
+  --g-mid:     #166534;
+  --g-bright:  #16a34a;
+  --g-emerald: #10b981;
+  --g-mint:    #6ee7b7;
+  --g-light:   #d1fae5;
+  --g-pale:    #ecfdf5;
+  --cyan:      #06b6d4;
+  --teal:      #0d9488;
+
+  /* Glass tokens */
+  --glass-white:   rgba(255, 255, 255, 0.55);
+  --glass-light:   rgba(255, 255, 255, 0.35);
+  --glass-subtle:  rgba(255, 255, 255, 0.20);
+  --glass-border:  rgba(255, 255, 255, 0.65);
+  --glass-border2: rgba(255, 255, 255, 0.40);
+  --glass-shadow:  rgba(16, 105, 60, 0.12);
+
+  /* Text */
+  --text-primary:   #0d4a2f;
+  --text-secondary: #166534;
+  --text-muted:     rgba(13, 74, 47, 0.55);
+  --text-light:     rgba(13, 74, 47, 0.35);
+}
+
+/* ── BASE ────────────────────────────────────────────────────────── */
 @layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
   body {
     margin: 0;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-    @apply bg-slate-50 text-slate-900 dark:bg-[#0b0f19] dark:text-[#f8fafc];
+    font-family: 'Inter', 'Nunito', system-ui, sans-serif;
+    background: #e8f5e9;
+    color: var(--text-primary);
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #root { position: relative; }
+}
+
+/* ── NATURE BACKGROUND ───────────────────────────────────────────── */
+.nature-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  /* Layered nature atmosphere */
+  background:
+    /* Top-left leaf bokeh */
+    radial-gradient(ellipse 40% 35% at 5% 5%,   rgba(34, 197, 94, 0.30) 0%, transparent 65%),
+    /* Top-right light */
+    radial-gradient(ellipse 50% 40% at 95% 3%,  rgba(167, 243, 208, 0.25) 0%, transparent 60%),
+    /* Mid green glow */
+    radial-gradient(ellipse 70% 50% at 50% 70%, rgba(16, 185, 129, 0.15) 0%, transparent 70%),
+    /* Bottom forest */
+    radial-gradient(ellipse 80% 40% at 20% 100%, rgba(22, 101, 52, 0.20) 0%, transparent 55%),
+    /* Sky gradient */
+    linear-gradient(170deg,
+      #c8edd8 0%,
+      #d4f1e4 20%,
+      #b8e8d0 45%,
+      #a8d8c0 65%,
+      #8ecfb0 85%,
+      #76c4a0 100%
+    );
+  pointer-events: none;
+}
+
+/* Floating leaf elements */
+.nature-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle 3px at 8%  20%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(circle 4px at 15% 60%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(circle 2px at 92% 25%, rgba(255,255,255,0.7) 0%, transparent 100%),
+    radial-gradient(circle 3px at 85% 75%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(circle 2px at 55% 10%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(circle 5px at 70% 85%, rgba(255,255,255,0.4) 0%, transparent 100%);
+}
+
+/* Subtle leaf-vein grid */
+.nature-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ── GLASS COMPONENT SYSTEM ──────────────────────────────────────── */
+@layer components {
+
+  /* Main frosted card */
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.52);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.70);
+    box-shadow:
+      0 8px 32px rgba(16, 105, 60, 0.10),
+      0 2px 8px  rgba(16, 105, 60, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.80);
+  }
+
+  /* Lighter floating card */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.42);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.60);
+    box-shadow:
+      0 4px 20px rgba(16, 105, 60, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.70);
+    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
+                box-shadow 0.25s ease,
+                border-color 0.25s ease;
+  }
+
+  .glass-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(255,255,255,0.80);
+    box-shadow:
+      0 12px 40px rgba(16, 105, 60, 0.14),
+      0 4px 12px  rgba(16, 185, 129, 0.10),
+      inset 0 1px 0 rgba(255,255,255,0.85);
+  }
+
+  /* Deep glass — sidebar, modals */
+  .glass-deep {
+    background: rgba(255, 255, 255, 0.62);
+    backdrop-filter: blur(32px) saturate(200%);
+    -webkit-backdrop-filter: blur(32px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    box-shadow:
+      0 16px 48px rgba(16, 105, 60, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.90);
+  }
+
+  /* Green eco input */
+  .eco-input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(255, 255, 255, 0.70);
+    border-radius: 14px;
+    padding: 0.75rem 1rem;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    outline: none;
+    transition: all 0.2s ease;
+    box-shadow: inset 0 2px 4px rgba(16, 105, 60, 0.06);
+  }
+  .eco-input:focus {
+    border-color: rgba(16, 185, 129, 0.55);
+    background: rgba(255,255,255,0.72);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12), inset 0 2px 4px rgba(16, 105, 60, 0.04);
+  }
+  .eco-input::placeholder { color: rgba(13, 74, 47, 0.38); }
+
+  /* Primary green button */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, #16a34a 0%, #059669 100%);
+    color: white;
+    font-weight: 700;
+    font-size: 0.875rem;
+    border-radius: 14px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(22, 163, 74, 0.35), inset 0 1px 0 rgba(255,255,255,0.15);
+    transition: all 0.2s ease;
+    letter-spacing: 0.01em;
+  }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #15803d 0%, #047857 100%);
+    box-shadow: 0 8px 24px rgba(22, 163, 74, 0.40);
+    transform: translateY(-1px);
+  }
+  .btn-primary:active { transform: scale(0.97); }
+  .btn-primary:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
+
+  /* Ghost glass button */
+  .btn-glass {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.25rem;
+    background: rgba(255, 255, 255, 0.50);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    border-radius: 12px;
+    border: 1.5px solid rgba(255,255,255,0.65);
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(16, 105, 60, 0.08);
+    transition: all 0.2s ease;
+  }
+  .btn-glass:hover {
+    background: rgba(255,255,255,0.70);
+    border-color: rgba(16,185,129,0.35);
+    color: var(--g-bright);
+    box-shadow: 0 4px 16px rgba(16, 105, 60, 0.12);
+    transform: translateY(-1px);
+  }
+
+  /* Outline eco */
+  .btn-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.25rem;
+    background: transparent;
+    color: var(--g-bright);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    border-radius: 12px;
+    border: 1.5px solid rgba(22, 163, 74, 0.40);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-outline:hover {
+    background: rgba(22, 163, 74, 0.08);
+    border-color: var(--g-bright);
   }
 }
 
-/* Premium Glassmorphic component classes */
-.glass-panel {
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* ── ANIMATIONS ──────────────────────────────────────────────────── */
+@keyframes fadeInUp   { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+@keyframes fadeIn     { from { opacity:0; } to { opacity:1; } }
+@keyframes scaleIn    { from { opacity:0; transform:scale(0.94); } to { opacity:1; transform:scale(1); } }
+@keyframes float      { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-8px); } }
+@keyframes leafSway   { 0%,100% { transform:rotate(-6deg) scale(1); } 50% { transform:rotate(6deg) scale(1.05); } }
+@keyframes shimmer    { 0% { background-position:-200% 0; } 100% { background-position:200% 0; } }
+@keyframes slideInRight { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
+@keyframes pulse      { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+
+.animate-fade-in     { animation: fadeIn     0.35s ease forwards; }
+.animate-fade-in-up  { animation: fadeInUp   0.45s cubic-bezier(0.4,0,0.2,1) forwards; }
+.animate-scale-in    { animation: scaleIn    0.30s cubic-bezier(0.4,0,0.2,1) forwards; }
+.animate-float       { animation: float      3.5s ease-in-out infinite; }
+.animate-leaf        { animation: leafSway   4s   ease-in-out infinite; }
+.animate-slide-right { animation: slideInRight 0.4s cubic-bezier(0.4,0,0.2,1) forwards; }
+
+/* ── SCROLLBAR ───────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.20); border-radius: 9999px; }
+::-webkit-scrollbar-thumb { background: rgba(16,185,129,0.35); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(16,185,129,0.55); }
+
+/* ── LEAFLET OVERRIDES ───────────────────────────────────────────── */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: rgba(255,255,255,0.88) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  color: #0d4a2f !important;
+  border: 1px solid rgba(255,255,255,0.80) !important;
+  box-shadow: 0 12px 40px rgba(16,105,60,0.15) !important;
+  border-radius: 16px !important;
+}
+.leaflet-popup-close-button { color: #166534 !important; }
+.leaflet-popup-close-button:hover { color: #16a34a !important; }
+.leaflet-container { background: #c8edd8; }
+.leaflet-control-zoom a {
+  background: rgba(255,255,255,0.80) !important;
+  backdrop-filter: blur(12px) !important;
+  color: #166534 !important;
+  border: 1px solid rgba(255,255,255,0.70) !important;
+  border-radius: 10px !important;
+}
+.leaflet-control-zoom a:hover {
+  background: rgba(255,255,255,0.95) !important;
+  color: #16a34a !important;
 }
 
-.glass-card {
-  background: rgba(30, 41, 59, 0.5);
+/* ── SELECT ──────────────────────────────────────────────────────── */
+select option { background: #f0fdf4; color: #0d4a2f; }
+
+/* ── STATUS CHIPS ────────────────────────────────────────────────── */
+.chip-ok       { background: rgba(16,185,129,0.14); color: #065f46; border: 1px solid rgba(16,185,129,0.30); border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 700; }
+.chip-warn     { background: rgba(245,158,11,0.14); color: #92400e; border: 1px solid rgba(245,158,11,0.30); border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 700; }
+.chip-critical { background: rgba(239,68,68,0.12);  color: #991b1b; border: 1px solid rgba(239,68,68,0.28); border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 700; }
+
+/* ── FEATURE ICON BADGES ─────────────────────────────────────────── */
+.feat-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.60);
   backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.glass-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-}
-
-/* Smooth micro-animations */
-@keyframes pulseGlow {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.05); }
-}
-
-.animate-pulse-glow {
-  animation: pulseGlow 2s infinite ease-in-out;
-}
-
-/* Custom sleek scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #0b0f19;
-}
-::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
-}
-
-/* Leaflet Dark Mode Popup Overrides */
-.dark .custom-popup .leaflet-popup-content-wrapper,
-.dark .custom-popup .leaflet-popup-tip {
-  background-color: #0f172a; /* Tailwind slate-900 */
-  color: #e2e8f0; /* Tailwind slate-200 */
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-}
-
-.dark .custom-popup .leaflet-popup-close-button {
-  color: #94a3b8 !important; /* Tailwind slate-400 */
-}
-
-.dark .custom-popup .leaflet-popup-close-button:hover {
-  color: #f8fafc !important; /* Tailwind slate-50 */
+  border: 1px solid rgba(255,255,255,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(16,105,60,0.10);
+  margin: 0 auto 8px;
 }
