@@ -2,12 +2,35 @@ from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from app.database import bins_collection, history_collection
 from app.models import BinCreate
+import statistics
 
 
 def _serialize(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if doc:
         doc.pop("_id", None)
     return doc
+
+
+def _calculate_confidence(recent_readings: List[Dict[str, Any]], new_fill: float, old_fill: Optional[float]) -> float:
+    confidence = 100.0
+    
+    # 1. Rate of change penalty (Spikes)
+    if old_fill is not None:
+        delta = abs(new_fill - old_fill)
+        if delta > 25.0:
+            confidence -= (delta - 25.0) * 1.5
+            
+    # 2. Jitter / Randomness penalty
+    if len(recent_readings) >= 3:
+        fills = [r["fill_percentage"] for r in recent_readings[-4:]] + [new_fill]
+        try:
+            stdev = statistics.stdev(fills)
+            if stdev > 10.0:
+                confidence -= (stdev - 10.0) * 2.5
+        except Exception:
+            pass
+
+    return max(0.0, min(100.0, round(confidence, 1)))
 
 
 def get_all_bins() -> List[Dict[str, Any]]:
@@ -25,6 +48,8 @@ def create_bin(bin_data: BinCreate) -> Dict[str, Any]:
     doc["fill_percentage"] = 0.0
     doc["status"] = "OK"
     doc["last_updated"] = datetime.now(timezone.utc).isoformat()
+    doc["confidence_percent"] = 100.0
+    doc["recent_readings"] = [{"timestamp": doc["last_updated"], "fill_percentage": 0.0}]
 
     # Upsert or Insert
     bins_collection.update_one(
@@ -42,12 +67,25 @@ def update_bin_fill_level(bin_id: str, fill_percentage: float) -> Optional[Dict[
     else:
         status = "OK"
 
+    # Fetch old bin to calculate confidence and update recent_readings
+    old_bin = bins_collection.find_one({"bin_id": bin_id})
+    recent_readings = old_bin.get("recent_readings", []) if old_bin else []
+    old_fill = old_bin.get("fill_percentage") if old_bin else None
+    
+    confidence_percent = _calculate_confidence(recent_readings, fill_percentage, old_fill)
+    
     timestamp = datetime.now(timezone.utc).isoformat()
+    
+    recent_readings.append({"timestamp": timestamp, "fill_percentage": fill_percentage})
+    if len(recent_readings) > 5:
+        recent_readings = recent_readings[-5:]
 
     update_fields = {
         "fill_percentage": fill_percentage,
         "status": status,
         "last_updated": timestamp,
+        "confidence_percent": confidence_percent,
+        "recent_readings": recent_readings
     }
 
     # Update bin state
@@ -73,6 +111,7 @@ def update_bin_fill_level(bin_id: str, fill_percentage: float) -> Optional[Dict[
         "bin_id": bin_id,
         "timestamp": timestamp,
         "fill_percentage": fill_percentage,
+        "confidence_percent": confidence_percent
     }
     history_collection.insert_one(history_record)
 
@@ -129,323 +168,19 @@ def seed_initial_bins() -> List[Dict[str, Any]]:
             "fill_percentage": 92.5,
             "status": "Critical",
         },
-        {
-            "bin_id": "bin_005",
-            "location": "Govindpura Industrial Area",
-            "latitude": 23.2500,
-            "longitude": 77.4500,
-            "capacity": 100.0,
-            "priority": 1,
-            "fill_percentage": 97.0,
-            "status": "Critical",
-        },
-        # 30 New Nodes for Bhopal
-        {
-            "bin_id": "bin_006",
-            "location": "Bhopal Junction Railway Station",
-            "latitude": 23.2660,
-            "longitude": 77.4140,
-            "capacity": 200.0,
-            "priority": 2,
-            "fill_percentage": 55.2,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_007",
-            "location": "Upper Lake (Boat Club)",
-            "latitude": 23.2505,
-            "longitude": 77.3910,
-            "capacity": 120.0,
-            "priority": 3,
-            "fill_percentage": 35.0,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_008",
-            "location": "New Market",
-            "latitude": 23.2335,
-            "longitude": 77.4011,
-            "capacity": 150.0,
-            "priority": 2,
-            "fill_percentage": 48.5,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_009",
-            "location": "AIIMS Bhopal",
-            "latitude": 23.2045,
-            "longitude": 77.4600,
-            "capacity": 120.0,
-            "priority": 3,
-            "fill_percentage": 45.3,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_010",
-            "location": "MANIT Campus",
-            "latitude": 23.2140,
-            "longitude": 77.4055,
-            "capacity": 100.0,
-            "priority": 2,
-            "fill_percentage": 26.1,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_011",
-            "location": "Sair Sapata",
-            "latitude": 23.2105,
-            "longitude": 77.3888,
-            "capacity": 80.0,
-            "priority": 3,
-            "fill_percentage": 30.0,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_012",
-            "location": "VIP Road",
-            "latitude": 23.2690,
-            "longitude": 77.3870,
-            "capacity": 100.0,
-            "priority": 2,
-            "fill_percentage": 51.0,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_013",
-            "location": "Kolar Road (Chuna Bhatti)",
-            "latitude": 23.1895,
-            "longitude": 77.4100,
-            "capacity": 120.0,
-            "priority": 3,
-            "fill_percentage": 42.4,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_014",
-            "location": "Awadhpuri Square",
-            "latitude": 23.2325,
-            "longitude": 77.4810,
-            "capacity": 80.0,
-            "priority": 2,
-            "fill_percentage": 22.0,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_015",
-            "location": "Indrapuri C-Sector",
-            "latitude": 23.2560,
-            "longitude": 77.4655,
-            "capacity": 100.0,
-            "priority": 1,
-            "fill_percentage": 96.5,
-            "status": "Critical",
-        },
-        {
-            "bin_id": "bin_016",
-            "location": "Ashoka Garden",
-            "latitude": 23.2680,
-            "longitude": 77.4285,
-            "capacity": 150.0,
-            "priority": 3,
-            "fill_percentage": 38.0,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_017",
-            "location": "Habibganj Naka",
-            "latitude": 23.2205,
-            "longitude": 77.4360,
-            "capacity": 120.0,
-            "priority": 2,
-            "fill_percentage": 58.0,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_018",
-            "location": "Misrod (Hoshangabad Road)",
-            "latitude": 23.1855,
-            "longitude": 77.4680,
-            "capacity": 100.0,
-            "priority": 3,
-            "fill_percentage": 49.9,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_019",
-            "location": "Barkatullah University",
-            "latitude": 23.2005,
-            "longitude": 77.4475,
-            "capacity": 80.0,
-            "priority": 2,
-            "fill_percentage": 40.0,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_020",
-            "location": "ISBT (Chetak Bridge)",
-            "latitude": 23.2425,
-            "longitude": 77.4455,
-            "capacity": 200.0,
-            "priority": 1,
-            "fill_percentage": 99.1,
-            "status": "Critical",
-        },
-        {
-            "bin_id": "bin_021",
-            "location": "TT Nagar Stadium",
-            "latitude": 23.2315,
-            "longitude": 77.3985,
-            "capacity": 150.0,
-            "priority": 3,
-            "fill_percentage": 12.5,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_022",
-            "location": "Taj-ul-Masajid",
-            "latitude": 23.2605,
-            "longitude": 77.3940,
-            "capacity": 120.0,
-            "priority": 2,
-            "fill_percentage": 34.0,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_023",
-            "location": "Karond Chauraha",
-            "latitude": 23.3005,
-            "longitude": 77.4150,
-            "capacity": 100.0,
-            "priority": 3,
-            "fill_percentage": 42.5,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_024",
-            "location": "Bairagarh Main Road",
-            "latitude": 23.2755,
-            "longitude": 77.3325,
-            "capacity": 120.0,
-            "priority": 2,
-            "fill_percentage": 47.0,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_025",
-            "location": "Vallabh Bhawan (Mantralaya)",
-            "latitude": 23.2405,
-            "longitude": 77.4160,
-            "capacity": 100.0,
-            "priority": 3,
-            "fill_percentage": 35.5,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_026",
-            "location": "Shahpura Lake Promenade",
-            "latitude": 23.2055,
-            "longitude": 77.4245,
-            "capacity": 80.0,
-            "priority": 2,
-            "fill_percentage": 36.2,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_027",
-            "location": "Ayodhya Bypass Road",
-            "latitude": 23.2845,
-            "longitude": 77.4560,
-            "capacity": 100.0,
-            "priority": 3,
-            "fill_percentage": 40.0,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_028",
-            "location": "Bittan Market",
-            "latitude": 23.2215,
-            "longitude": 77.4170,
-            "capacity": 150.0,
-            "priority": 1,
-            "fill_percentage": 94.0,
-            "status": "Critical",
-        },
-        {
-            "bin_id": "bin_029",
-            "location": "Jinsi Chauraha",
-            "latitude": 23.2610,
-            "longitude": 77.4125,
-            "capacity": 100.0,
-            "priority": 2,
-            "fill_percentage": 41.0,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_030",
-            "location": "Lalghati Square",
-            "latitude": 23.2740,
-            "longitude": 77.3755,
-            "capacity": 120.0,
-            "priority": 3,
-            "fill_percentage": 44.4,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_031",
-            "location": "Jahangirabad",
-            "latitude": 23.2545,
-            "longitude": 77.4090,
-            "capacity": 100.0,
-            "priority": 2,
-            "fill_percentage": 58.0,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_032",
-            "location": "Mata Mandir Square",
-            "latitude": 23.2260,
-            "longitude": 77.4020,
-            "capacity": 120.0,
-            "priority": 3,
-            "fill_percentage": 47.5,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_033",
-            "location": "10 No. Market",
-            "latitude": 23.2175,
-            "longitude": 77.4150,
-            "capacity": 150.0,
-            "priority": 1,
-            "fill_percentage": 93.0,
-            "status": "Critical",
-        },
-        {
-            "bin_id": "bin_034",
-            "location": "BHEL Township (Piplani)",
-            "latitude": 23.2515,
-            "longitude": 77.4720,
-            "capacity": 100.0,
-            "priority": 2,
-            "fill_percentage": 18.0,
-            "status": "OK",
-        },
-        {
-            "bin_id": "bin_035",
-            "location": "Van Vihar Gate",
-            "latitude": 23.2381,
-            "longitude": 77.3698,
-            "capacity": 80.0,
-            "priority": 3,
-            "fill_percentage": 25.0,
-            "status": "OK",
-        }
+        
     ]
 
     seeded = []
     timestamp = datetime.now(timezone.utc).isoformat()
     for b in initial_bins:
         b["last_updated"] = timestamp
+        b["confidence_percent"] = 98.5
+        b["recent_readings"] = [
+            {"timestamp": timestamp, "fill_percentage": max(0.0, b["fill_percentage"] - 2.0)},
+            {"timestamp": timestamp, "fill_percentage": max(0.0, b["fill_percentage"] - 1.0)},
+            {"timestamp": timestamp, "fill_percentage": b["fill_percentage"]}
+        ]
         
         # Update/insert
         bins_collection.update_one(
@@ -456,7 +191,8 @@ def seed_initial_bins() -> List[Dict[str, Any]]:
             history_collection.insert_one({
                 "bin_id": b["bin_id"],
                 "timestamp": timestamp,
-                "fill_percentage": b["fill_percentage"]
+                "fill_percentage": b["fill_percentage"],
+                "confidence_percent": b["confidence_percent"]
             })
         seeded.append(b)
 
@@ -479,13 +215,28 @@ def randomize_all_bins() -> None:
         else:
             status = "OK"
             
+        recent_readings = b.get("recent_readings", [])
+        old_fill = b.get("fill_percentage")
+        confidence_percent = _calculate_confidence(recent_readings, new_fill, old_fill)
+        
+        recent_readings.append({"timestamp": timestamp, "fill_percentage": new_fill})
+        if len(recent_readings) > 5:
+            recent_readings = recent_readings[-5:]
+            
         bins_collection.update_one(
             {"_id": b["_id"]},
-            {"$set": {"fill_percentage": new_fill, "status": status, "last_updated": timestamp}}
+            {"$set": {
+                "fill_percentage": new_fill, 
+                "status": status, 
+                "last_updated": timestamp,
+                "confidence_percent": confidence_percent,
+                "recent_readings": recent_readings
+            }}
         )
         
         history_collection.insert_one({
             "bin_id": b["bin_id"],
             "timestamp": timestamp,
-            "fill_percentage": new_fill
+            "fill_percentage": new_fill,
+            "confidence_percent": confidence_percent
         })

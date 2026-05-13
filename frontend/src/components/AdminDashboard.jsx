@@ -206,7 +206,7 @@ function AdminDashboard() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr style={{ borderBottom: '1px solid rgba(13,74,47,0.10)' }}>
-                      {['Location','ID','Fill Level','Capacity','Priority','Status'].map(h => (
+                      {['Location','ID','Fill Level','Capacity','Priority','Confidence','Status'].map(h => (
                         <th key={h} className="text-left py-2 px-2 font-bold uppercase tracking-wider"
                             style={{ color: 'rgba(13,74,47,0.40)', fontSize: 9 }}>{h}</th>
                       ))}
@@ -238,12 +238,19 @@ function AdminDashboard() {
                             P{b.priority}
                           </span>
                         </td>
+                        <td className="py-2.5 px-2">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                                style={{ background: (b.confidence_percent ?? 100) > 80 ? 'rgba(22,163,74,0.12)' : (b.confidence_percent ?? 100) > 50 ? 'rgba(217,119,6,0.12)' : 'rgba(220,38,38,0.12)',
+                                         color: (b.confidence_percent ?? 100) > 80 ? '#16a34a' : (b.confidence_percent ?? 100) > 50 ? '#d97706' : '#dc2626' }}>
+                            {(b.confidence_percent ?? 100).toFixed(1)}%
+                          </span>
+                        </td>
                         <td className="py-2.5 px-2"><span className={statusChip(b.status)}>{b.status}</span></td>
                       </tr>
                     ))}
                     {bins.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-xs italic" style={{ color: 'rgba(13,74,47,0.35)' }}>
+                        <td colSpan={7} className="py-8 text-center text-xs italic" style={{ color: 'rgba(13,74,47,0.35)' }}>
                           No bins loaded — use Quick Actions → Seed Fleet to populate.
                         </td>
                       </tr>
@@ -329,12 +336,13 @@ function AdminDashboard() {
 
             <div className="p-5 overflow-y-auto flex-1 space-y-4">
               {/* key stats */}
-              <div className="grid grid-cols-4 gap-2 p-3 rounded-xl text-center"
+              <div className="grid grid-cols-5 gap-2 p-3 rounded-xl text-center"
                    style={{ background: 'rgba(255,255,255,0.50)', border: '1px solid rgba(255,255,255,0.65)' }}>
                 {[
                   { label: 'Fill',     value: `${selectedBin.fill_percentage}%`, color: selectedBin.fill_percentage > 80 ? '#dc2626' : '#0d4a2f' },
                   { label: 'Capacity', value: `${selectedBin.capacity}L`,        color: '#0d9488' },
                   { label: 'Priority', value: `P${selectedBin.priority}`,        color: '#d97706' },
+                  { label: 'Conf.',    value: `${(selectedBin.confidence_percent ?? 100).toFixed(0)}%`, color: (selectedBin.confidence_percent ?? 100) > 80 ? '#16a34a' : (selectedBin.confidence_percent ?? 100) > 50 ? '#d97706' : '#dc2626' },
                   { label: 'Status',   value: selectedBin.status,                color: selectedBin.status === 'Critical' ? '#dc2626' : '#16a34a' },
                 ].map(m => (
                   <div key={m.label}>
@@ -373,6 +381,12 @@ function AdminDashboard() {
                             <span className="text-[9px]" style={{ color: 'rgba(13,74,47,0.45)' }}>{date}</span>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
+                            {item.confidence_percent !== undefined && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md" 
+                                    style={{ background: item.confidence_percent > 80 ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)', color: item.confidence_percent > 80 ? '#16a34a' : '#dc2626' }}>
+                                C:{item.confidence_percent.toFixed(0)}%
+                              </span>
+                            )}
                             <FillBar pct={item.fill_percentage} />
                             <span className="font-bold text-xs w-8 text-right" style={{ color: '#0d4a2f' }}>
                               {item.fill_percentage}%

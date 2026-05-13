@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 # pyrefly: ignore [missing-import]
 from pydantic import BaseModel, Field
 
@@ -21,11 +21,14 @@ class BinResponse(BinBase):
     fill_percentage: float = Field(0.0, description="Current fill level percentage (0 to 100)")
     status: str = Field("OK", description="Status: 'OK', 'Needs Collection', or 'Critical'")
     last_updated: Optional[str] = None
+    confidence_percent: float = Field(100.0, description="Confidence metric for the latest reading")
+    recent_readings: List[Dict[str, Any]] = Field(default_factory=list, description="Last 5 readings to calculate jitter")
 
 
 class BinHistoryItem(BaseModel):
     timestamp: str
     fill_percentage: float
+    confidence_percent: float = Field(100.0)
 
 
 class BinHistoryResponse(BaseModel):

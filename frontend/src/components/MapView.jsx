@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
 // Animated vehicle marker component to isolate rapid state updates
@@ -218,12 +218,12 @@ const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL', oper
 
         {/* Permanent Starting Depot Marker: Bhopal Nagar Nigam Building */}
         <Marker position={[23.2244, 77.4027]} icon={getStartIcon()}>
-          <Popup className="rounded-xl bg-slate-900 text-slate-200 border-none">
+          <Tooltip direction="top" offset={[0, -10]} className="rounded-xl bg-slate-900 text-slate-200 border-none">
             <div className="p-1 text-slate-200 font-sans text-left">
               <p className="font-bold text-xs text-white">Bhopal Nagar Nigam Building</p>
               <p className="text-[10px] text-slate-400 mt-0.5">Municipal Corporation Headquarters &amp; Starting Dispatch Depot</p>
             </div>
-          </Popup>
+          </Tooltip>
         </Marker>
 
         {/* Dynamic Ending Dump Site Markers Extracted from Final Route Coordinates */}
@@ -233,7 +233,7 @@ const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL', oper
           const finalCoord = route.roadGeometry[route.roadGeometry.length - 1];
           return (
             <Marker key={`end-marker-${route.van_id}-${idx}`} position={finalCoord} icon={getEndIcon()}>
-              <Popup className="rounded-xl bg-slate-900 text-slate-200 border-none">
+              <Tooltip direction="top" offset={[0, -10]} className="rounded-xl bg-slate-900 text-slate-200 border-none">
                 <div className="p-1 text-slate-200 font-sans text-left">
                   <p className="font-bold text-xs text-white flex items-center gap-2">
                     <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: getVanColor(route.van_id) }}></span>
@@ -241,7 +241,7 @@ const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL', oper
                   </p>
                   <p className="text-[10px] text-slate-400 mt-0.5">Terminal dumping grounds for Van {route.van_id}</p>
                 </div>
-              </Popup>
+              </Tooltip>
             </Marker>
           );
         })}
@@ -263,7 +263,7 @@ const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL', oper
                 click: () => setSelectedBin(bin),
               }}
             >
-              <Popup className="rounded-2xl shadow-xl border-0 overflow-hidden custom-popup bg-slate-900">
+              <Tooltip direction="top" offset={[0, -5]} className="rounded-2xl shadow-xl border-0 overflow-hidden custom-popup bg-slate-900">
                 <div className="p-1 text-slate-200 font-sans text-left min-w-[150px]">
                   <p className="font-bold text-xs border-b border-slate-700 pb-1 mb-1.5 flex items-center justify-between gap-2">
                     <span className="truncate text-white">{bin.location}</span>
@@ -293,7 +293,7 @@ const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL', oper
                     </div>
                   </div>
                 </div>
-              </Popup>
+              </Tooltip>
             </Marker>
           );
         })}
@@ -312,12 +312,12 @@ const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL', oper
               })}
               zIndexOffset={800}
             >
-              <Popup className="rounded-xl bg-slate-900 text-slate-200 border-none">
+              <Tooltip direction="top" offset={[0, -5]} className="rounded-xl bg-slate-900 text-slate-200 border-none">
                 <div className="p-1 text-slate-200 font-sans text-left">
                   <p className="font-bold text-xs text-white">Van {idx+1} (Live)</p>
                   <p className="text-[10px] text-slate-400 mt-0.5">Operator: {op.username}</p>
                 </div>
-              </Popup>
+              </Tooltip>
             </Marker>
           );
         })}
