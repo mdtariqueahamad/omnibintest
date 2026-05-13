@@ -5,6 +5,8 @@ import AdminDashboard from './components/AdminDashboard';
 import CitizenMap from './components/CitizenMap';
 import { ThemeProvider } from './context/ThemeContext';
 
+import OperatorDashboard from './components/OperatorDashboard';
+
 // Simple Protected Route wrapper
 const ProtectedRoute = ({ children, isAllowed, redirectTo = "/" }) => {
   if (!isAllowed) {
@@ -14,14 +16,15 @@ const ProtectedRoute = ({ children, isAllowed, redirectTo = "/" }) => {
 };
 
 function App() {
-  // role can be null, 'admin', or 'citizen'
+  // role can be null, 'admin', 'operator'
   const [role, setRole] = useState(null);
+  const [operatorId, setOperatorId] = useState(null);
 
   return (
     <ThemeProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<LoginPage setRole={setRole} />} />
+          <Route path="/" element={<LoginPage setRole={setRole} setOperatorId={setOperatorId} />} />
           
           <Route 
             path="/dashboard" 
@@ -33,10 +36,10 @@ function App() {
           />
           
           <Route 
-            path="/nearby" 
+            path="/operator-dashboard" 
             element={
-              <ProtectedRoute isAllowed={role === 'citizen'}>
-                <CitizenMap setRole={setRole} />
+              <ProtectedRoute isAllowed={role === 'operator'}>
+                <OperatorDashboard operatorId={operatorId} setRole={setRole} setOperatorId={setOperatorId} />
               </ProtectedRoute>
             } 
           />

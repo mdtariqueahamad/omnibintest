@@ -125,7 +125,7 @@ const getCustomIcon = (fillPercentage, isDimmed = false) => {
   });
 };
 
-const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL' }) => {
+const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL', operators = [], routingMode = 'static' }) => {
   // Center map focused around localized Bhopal coordinates initially
   const centerPosition = [23.2360, 77.4700];
 
@@ -292,6 +292,30 @@ const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL' }) =>
                       </span>
                     </div>
                   </div>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
+
+        {/* Live Operator Van Markers */}
+        {routingMode === 'dynamic' && operators.filter(o => o.state === 'live' && o.latitude && o.longitude).map((op, idx) => {
+          return (
+            <Marker
+              key={`op-${op.operator_id}`}
+              position={[op.latitude, op.longitude]}
+              icon={L.divIcon({
+                className: 'custom-vehicle-icon',
+                html: `<div class="w-4 h-4 bg-yellow-400 rounded-full shadow-[0_0_15px_rgba(250,204,21,0.9)] border-2 border-white flex items-center justify-center"><span class="text-[8px] font-black text-yellow-900">${idx+1}</span></div>`,
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+              })}
+              zIndexOffset={800}
+            >
+              <Popup className="rounded-xl bg-slate-900 text-slate-200 border-none">
+                <div className="p-1 text-slate-200 font-sans text-left">
+                  <p className="font-bold text-xs text-white">Van {idx+1} (Live)</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Operator: {op.username}</p>
                 </div>
               </Popup>
             </Marker>

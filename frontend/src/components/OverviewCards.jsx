@@ -4,15 +4,16 @@ import {
   Leaf, Fuel, DollarSign, Route, Zap, BarChart3
 } from 'lucide-react';
 
-const OverviewCards = ({ bins, optimalRoute, config }) => {
+const OverviewCards = ({ bins, optimalRoute, config, operators = [] }) => {
   const stats = useMemo(() => {
     const total      = bins.length;
     const critical   = bins.filter(b => b.status === 'Critical').length;
     const needsColl  = bins.filter(b => b.status === 'Needs Collection').length;
     const healthy    = bins.filter(b => b.status === 'OK').length;
     const avgFill    = total > 0 ? Math.round(bins.reduce((a, b) => a + (b.fill_percentage || 0), 0) / total) : 0;
-    const vans       = optimalRoute?.fleet_totals?.total_vans || 0;
-    const routes     = optimalRoute?.fleet_routes?.length || 0;
+    const liveVans   = operators.filter(o => o.state === 'live').length;
+    const vans       = liveVans;
+    const routes     = liveVans;
     const totalDist  = optimalRoute?.fleet_totals?.total_distance || 0;
     const totalFuel  = optimalRoute?.fleet_totals?.total_fuel || 0;
     const totalCost  = optimalRoute?.fleet_totals?.total_cost || 0;
@@ -33,7 +34,7 @@ const OverviewCards = ({ bins, optimalRoute, config }) => {
       { id:'active-routes', label:'Active Routes',        value: routes,          unit:'routes', icon: Route,       color:'#0d9488', bg:'rgba(13,148,136,0.10)',  border:'rgba(13,148,136,0.22)' },
       { id:'vans-duty',     label:'Vans on Duty',         value: vans,            unit:'vans',   icon: Truck,       color:'#d97706', bg:'rgba(217,119,6,0.10)',   border:'rgba(217,119,6,0.22)'  },
     ];
-  }, [bins, optimalRoute, config]);
+  }, [bins, optimalRoute, config, operators]);
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">

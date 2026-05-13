@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { Route, Sparkles, RefreshCw, AlertCircle, CheckCircle, Truck, Fuel, DollarSign, MapPin } from 'lucide-react';
 import { fetchOptimalRoute } from '../services/api';
 
-const RoutePanel = ({ optimalRoute, setOptimalRoute, bins = [] }) => {
+const RoutePanel = ({ optimalRoute, setOptimalRoute, bins = [], routingMode, setRoutingMode }) => {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState(null);
 
   const handleGenerateRoute = async () => {
     setLoading(true); setError(null);
     try {
-      const data = await fetchOptimalRoute();
+      const data = await fetchOptimalRoute(routingMode);
       setOptimalRoute(data);
     } catch {
       setError('Failed to compute VRP route. Ensure the backend service is running.');
@@ -24,7 +24,7 @@ const RoutePanel = ({ optimalRoute, setOptimalRoute, bins = [] }) => {
   ] : [];
 
   return (
-    <div className="glass-panel rounded-2xl p-5 text-left">
+    <div className="glass-panel rounded-2xl p-5 text-left flex flex-col h-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
         <div>
@@ -36,16 +36,36 @@ const RoutePanel = ({ optimalRoute, setOptimalRoute, bins = [] }) => {
             Multi-Vehicle Routing Problem & K-Means Clustering
           </p>
         </div>
-        <button
-          id="generate-routes-btn"
-          onClick={handleGenerateRoute}
-          disabled={loading}
-          className="btn-primary shrink-0 rounded-xl py-2.5 px-4 text-xs"
-        >
-          {loading
-            ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Computing...</>
-            : <><Sparkles className="w-3.5 h-3.5" /> Generate Routes</>}
-        </button>
+        
+        <div className="flex items-center gap-3">
+          {setRoutingMode && (
+            <div className="flex bg-slate-200/50 p-1 rounded-xl">
+              <button 
+                onClick={() => setRoutingMode('static')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${routingMode === 'static' ? 'bg-white shadow-sm text-teal-700' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Static (Depot)
+              </button>
+              <button 
+                onClick={() => setRoutingMode('dynamic')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${routingMode === 'dynamic' ? 'bg-white shadow-sm text-teal-700' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Dynamic (Live)
+              </button>
+            </div>
+          )}
+          
+          <button
+            id="generate-routes-btn"
+            onClick={handleGenerateRoute}
+            disabled={loading}
+            className="btn-primary shrink-0 rounded-xl py-2.5 px-4 text-xs"
+          >
+            {loading
+              ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Computing...</>
+              : <><Sparkles className="w-3.5 h-3.5" /> Generate Routes</>}
+          </button>
+        </div>
       </div>
 
       {/* Error */}

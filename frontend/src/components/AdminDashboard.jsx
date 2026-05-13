@@ -11,7 +11,7 @@ import AlertsPanel from './AlertsPanel';
 import FuelAnalytics from './FuelAnalytics';
 import {
   fetchBins, fetchBinHistory, seedBins,
-  randomizeBins, fetchOptimalRoute, fetchConfig
+  randomizeBins, fetchOptimalRoute, fetchConfig, fetchAllOperators
 } from '../services/api';
 import {
   X, Activity, Filter, Settings, Recycle,
@@ -48,11 +48,17 @@ function AdminDashboard() {
   const [config,            setConfig]            = useState(null);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [routeLoading,      setRouteLoading]      = useState(false);
+  const [routingMode,       setRoutingMode]       = useState('static');
+  const [operators,         setOperators]         = useState([]);
 
   /* polling */
   useEffect(() => {
     const load = async () => {
-      try { setBins(await fetchBins()); setIsConnected(true); }
+      try { 
+        setBins(await fetchBins()); 
+        setOperators(await fetchAllOperators());
+        setIsConnected(true); 
+      }
       catch { setIsConnected(false); }
     };
     load();
@@ -86,7 +92,7 @@ function AdminDashboard() {
     try {
       await randomizeBins();
       setBins(await fetchBins());
-      setOptimalRoute(await fetchOptimalRoute());
+      setOptimalRoute(await fetchOptimalRoute(routingMode));
       setSelectedVan('ALL');
     } catch (e) { console.error(e); }
     finally { setRandomizing(false); }
@@ -94,13 +100,13 @@ function AdminDashboard() {
 
   const handleOptimizeRoute = async () => {
     setRouteLoading(true);
-    try { setOptimalRoute(await fetchOptimalRoute()); setSelectedVan('ALL'); }
+    try { setOptimalRoute(await fetchOptimalRoute(routingMode)); setSelectedVan('ALL'); }
     catch (e) { console.error(e); }
     finally { setRouteLoading(false); }
   };
 
   const handleConfigSaved = async () => {
-    try { setOptimalRoute(await fetchOptimalRoute()); setSelectedVan('ALL'); }
+    try { setOptimalRoute(await fetchOptimalRoute(routingMode)); setSelectedVan('ALL'); }
     catch (e) { console.error(e); }
   };
 
@@ -159,14 +165,14 @@ function AdminDashboard() {
             </div>
 
             {/* 10-stat overview */}
-            <OverviewCards bins={bins} optimalRoute={optimalRoute} config={config} />
+            <OverviewCards bins={bins} optimalRoute={optimalRoute} config={config} operators={operators} />
 
             {/* Quick actions */}
             <QuickActions
               onSeed={handleSeed} seeding={seeding}
               onRandomize={handleRandomize} randomizing={randomizing}
               onConfig={() => setIsConfigModalOpen(true)}
-              onOptimizeRoute={handleOptimizeRoute}
+              onOptimizeRoute={handleOptimizeRoute} routeLoading={routeLoading}
               setOptimalRoute={setOptimalRoute}
               bins={bins}
             />
@@ -174,7 +180,7 @@ function AdminDashboard() {
             {/* Map + Alerts row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
-                <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} />
+                <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} operators={operators} routingMode={routingMode} />
               </div>
               <div className="flex flex-col gap-4">
                 <AlertsPanel bins={bins} />
@@ -183,7 +189,7 @@ function AdminDashboard() {
 
             {/* Route + Fuel row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <RoutePanel optimalRoute={optimalRoute} setOptimalRoute={setOptimalRoute} bins={bins} />
+              <RoutePanel optimalRoute={optimalRoute} setOptimalRoute={setOptimalRoute} bins={bins} routingMode={routingMode} setRoutingMode={setRoutingMode} />
               <FuelAnalytics optimalRoute={optimalRoute} config={config} />
             </div>
 
@@ -253,7 +259,7 @@ function AdminDashboard() {
         {activeTab === 'map' && (
           <div className="space-y-4 animate-fade-in">
             <PageHeader title="Live Telemetry Map" sub="Click markers for sensor details · Active routes shown in real-time" />
-            <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} />
+            <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} operators={operators} routingMode={routingMode} />
           </div>
         )}
 
@@ -262,10 +268,10 @@ function AdminDashboard() {
           <div className="space-y-4 animate-fade-in">
             <PageHeader title="Route Optimizer" sub="CVRP + OR-Tools · OSRM road-snapped geometry · Multi-van dispatch" />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <RoutePanel optimalRoute={optimalRoute} setOptimalRoute={setOptimalRoute} bins={bins} />
+              <RoutePanel optimalRoute={optimalRoute} setOptimalRoute={setOptimalRoute} bins={bins} routingMode={routingMode} setRoutingMode={setRoutingMode} />
               <FuelAnalytics optimalRoute={optimalRoute} config={config} />
             </div>
-            <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} />
+            <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} operators={operators} routingMode={routingMode} />
           </div>
         )}
 

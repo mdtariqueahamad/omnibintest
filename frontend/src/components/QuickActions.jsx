@@ -2,16 +2,18 @@ import React from 'react';
 import { Route, Plus, FileText, Truck, Bell, Map, AlertOctagon, Dices, RefreshCw } from 'lucide-react';
 import { fetchOptimalRoute } from '../services/api';
 
-const QuickActions = ({ onSeed, seeding, onRandomize, randomizing, onConfig, onOptimizeRoute, setOptimalRoute, bins }) => {
+const QuickActions = ({ onSeed, seeding, onRandomize, randomizing, onConfig, onOptimizeRoute, routeLoading, setOptimalRoute, bins }) => {
   const actions = [
     {
       id: 'qa-optimize',
-      label: 'Optimize Route',
+      label: routeLoading ? 'Optimizing…' : 'Optimize Route',
       icon: Route,
       color: '#0d9488',
       bg: 'rgba(13,148,136,0.12)',
       border: 'rgba(13,148,136,0.28)',
       onClick: onOptimizeRoute,
+      disabled: routeLoading,
+      spin: routeLoading,
     },
     {
       id: 'qa-seed',

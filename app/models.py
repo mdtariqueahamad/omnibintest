@@ -43,6 +43,7 @@ class RouteStep(BaseModel):
 
 class FleetRoute(BaseModel):
     van_id: int
+    operator_id: Optional[str] = None
     route: List[str]
     details: List[RouteStep]
     distance_km: float
@@ -69,3 +70,29 @@ class FleetConfig(BaseModel):
     van_capacity: float = Field(500.0, description="Max load capacity per van in liters")
     mileage_kmpl: float = Field(5.5, description="Average fuel consumption mileage in km/L")
     fuel_price: float = Field(95.0, description="Fuel cost per liter in INR")
+
+
+class OperatorBase(BaseModel):
+    username: str = Field(..., description="Unique username for the van operator")
+    state: str = Field("offline", description="'live' or 'offline'")
+    latitude: Optional[float] = Field(None, description="Current live latitude")
+    longitude: Optional[float] = Field(None, description="Current live longitude")
+
+
+class OperatorCreate(OperatorBase):
+    password: str = Field(..., description="Operator password")
+
+
+class OperatorResponse(OperatorBase):
+    operator_id: str
+
+
+class OperatorLogin(BaseModel):
+    username: str
+    password: str
+
+
+class OperatorLocationUpdate(BaseModel):
+    latitude: float
+    longitude: float
+

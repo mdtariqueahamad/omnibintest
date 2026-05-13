@@ -23,7 +23,7 @@ const FEATURES = [
   { icon: BarChart3,label: 'Analytics Insights',sub: 'Data-driven decisions' },
 ];
 
-const LoginPage = ({ setRole }) => {
+const LoginPage = ({ setRole, setOperatorId }) => {
   const [username,  setUsername]  = useState('');
   const [password,  setPassword]  = useState('');
   const [remember,  setRemember]  = useState(false);
@@ -32,22 +32,42 @@ const LoginPage = ({ setRole }) => {
   const [loading,   setLoading]   = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = e => {
+  const handleLogin = async e => {
     e.preventDefault();
     setError(''); setLoading(true);
-    setTimeout(() => {
-      if (username === 'admin' && password === 'admin123') {
+    
+    if (username === 'admin' && password === 'admin123') {
+      setTimeout(() => {
         setRole('admin'); navigate('/dashboard');
-      } else if (username === 'citizen' && password === 'user123') {
-        setRole('citizen'); navigate('/nearby');
+        setLoading(false);
+      }, 650);
+      return;
+    }
+    
+    // Call operator login API
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/operators/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setRole('operator');
+        setOperatorId(data.operator_id);
+        navigate('/operator-dashboard');
       } else {
         setError('Invalid credentials. Please try again.');
-        setLoading(false);
       }
-    }, 650);
+    } catch (err) {
+      setError('Connection to server failed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handlePublicAccess = () => { setRole('citizen'); navigate('/nearby'); };
+
 
   return (
     <div className="min-h-screen relative overflow-hidden flex items-center justify-center p-4">
@@ -254,23 +274,7 @@ const LoginPage = ({ setRole }) => {
               </button>
             </form>
 
-            {/* Divider */}
-            <div className="flex items-center gap-3 my-4">
-              <div className="flex-1 h-px" style={{ background: 'rgba(13,74,47,0.12)' }} />
-              <span className="text-xs font-medium" style={{ color: 'rgba(13,74,47,0.40)' }}>or continue with</span>
-              <div className="flex-1 h-px" style={{ background: 'rgba(13,74,47,0.12)' }} />
-            </div>
 
-            {/* Continue without login */}
-            <button
-              id="continue-without-login"
-              type="button"
-              onClick={handlePublicAccess}
-              className="btn-glass w-full py-3 rounded-2xl text-sm"
-            >
-              <Globe className="w-4 h-4" style={{ color: '#0d9488' }} />
-              Continue Without Login
-            </button>
 
             {/* Demo credentials */}
             <div className="mt-5 p-3.5 rounded-2xl"
@@ -280,7 +284,7 @@ const LoginPage = ({ setRole }) => {
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { label: '🛡 Admin',   user: 'admin',   pass: 'admin123' },
-                  { label: '🌿 Citizen', user: 'citizen', pass: 'user123'  },
+                  { label: '🚚 Van Op.', user: 'operator1', pass: 'password123'  },
                 ].map(c => (
                   <button
                     key={c.label}

@@ -57,12 +57,12 @@ def get_bin_history_logs(bin_id: str):
 
 
 @router.get("/api/routes/optimal", response_model=RouteResponse)
-def get_optimal_collection_route():
+def get_optimal_collection_route(mode: str = "static"):
     """
-    Calculate and return the optimized waste collection route using NetworkX TSP.
-    Considers bin fill levels, priority levels, and physical distances.
+    Calculate and return the optimized waste collection route.
+    If mode='dynamic', uses live operator locations.
     """
-    return routing.calculate_optimal_route()
+    return routing.calculate_optimal_route(mode=mode)
 
 
 @router.post("/api/bins/seed", response_model=List[BinResponse])

@@ -20,14 +20,34 @@ export const fetchBins = async () => {
   }
 };
 
-export const fetchOptimalRoute = async () => {
+export const fetchOptimalRoute = async (mode = 'static') => {
   try {
-    const response = await apiClient.get('/api/routes/optimal');
+    const response = await apiClient.get(`/api/routes/optimal?mode=${mode}`);
     return response.data;
   } catch (error) {
     console.error("Error calculating optimal route:", error);
     throw error;
   }
+};
+
+export const setOperatorLive = async (operatorId, lat, lon) => {
+  const res = await apiClient.put(`/api/operators/${operatorId}/live`, { latitude: lat, longitude: lon });
+  return res.data;
+};
+
+export const setOperatorOffline = async (operatorId) => {
+  const res = await apiClient.put(`/api/operators/${operatorId}/offline`);
+  return res.data;
+};
+
+export const updateOperatorLocation = async (operatorId, lat, lon) => {
+  const res = await apiClient.put(`/api/operators/${operatorId}/location`, { latitude: lat, longitude: lon });
+  return res.data;
+};
+
+export const fetchAllOperators = async () => {
+  const res = await apiClient.get('/api/operators');
+  return res.data;
 };
 
 export const fetchBinHistory = async (binId) => {

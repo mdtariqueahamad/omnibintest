@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 VAN_DISPATCH_FIXED_COST = 500.0  # Flat synthetic penalty to force solver to minimize van usage
 
 START_DEPOT = {
-    "lat": 23.2335, 
-    "lon": 77.4367, 
-    "id": "depot_isbt", 
-    "location": "Bhopal Municipal Corporation (BMC) Head Office - ISBT Campus"
+    "lat": 23.2244, 
+    "lon": 77.4027, 
+    "id": "depot", 
+    "location": "Bhopal Nagar Nigam Building"
 }
 
 END_FACILITIES = [
@@ -56,12 +56,12 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return float(R * c)
 
 
-def _calculate_osrm_route(target_bins: List[Dict[str, Any]], end_facility: Dict[str, Any]) -> Dict[str, Any]:
+def _calculate_osrm_route(start_node: Dict[str, Any], target_bins: List[Dict[str, Any]], end_facility: Dict[str, Any]) -> Dict[str, Any]:
     """
     Attempts to calculate an optimal road-snapped route using the Open Source Routing Machine (OSRM) API.
     """
-    locations = [f"{START_DEPOT['lon']},{START_DEPOT['lat']}"]
-    node_ids = [START_DEPOT['id']]
+    locations = [f"{start_node.get('lon', start_node.get('longitude'))},{start_node.get('lat', start_node.get('latitude'))}"]
+    node_ids = [start_node.get('id', start_node.get('operator_id', 'depot'))]
     
     for b in target_bins:
         if b.get("longitude") is not None and b.get("latitude") is not None:
@@ -100,7 +100,7 @@ def _calculate_osrm_route(target_bins: List[Dict[str, Any]], end_facility: Dict[
     bin_lookup = {b["bin_id"]: b for b in target_bins}
     
     for b_id in ordered_ids:
-        if b_id in (START_DEPOT['id'], end_facility['id']):
+        if b_id in (start_node.get('id', start_node.get('operator_id', 'depot')), end_facility['id']):
             continue
             
         b_info = bin_lookup[b_id]
@@ -121,12 +121,13 @@ def _calculate_osrm_route(target_bins: List[Dict[str, Any]], end_facility: Dict[
     }
 
 
-def _calculate_networkx_fallback_route(target_bins: List[Dict[str, Any]], end_facility: Dict[str, Any]) -> Dict[str, Any]:
+def _calculate_networkx_fallback_route(start_node: Dict[str, Any], target_bins: List[Dict[str, Any]], end_facility: Dict[str, Any]) -> Dict[str, Any]:
     """
     Fallback method using NetworkX Euclidean (Haversine) distances when OSRM fails.
     """
     G = nx.Graph()
-    G.add_node(START_DEPOT['id'], location=START_DEPOT['location'], lat=START_DEPOT['lat'], lon=START_DEPOT['lon'], fill_percentage=0.0, priority=0)
+    s_id = start_node.get('id', start_node.get('operator_id', 'depot'))
+    G.add_node(s_id, location=start_node.get('location', 'Start'), lat=start_node.get('lat', start_node.get('latitude')), lon=start_node.get('lon', start_node.get('longitude')), fill_percentage=0.0, priority=0)
     G.add_node(end_facility['id'], location=end_facility['location'], lat=end_facility['lat'], lon=end_facility['lon'], fill_percentage=0.0, priority=0)
 
     bin_lookup = {}
@@ -152,8 +153,8 @@ def _calculate_networkx_fallback_route(target_bins: List[Dict[str, Any]], end_fa
 
     tsp_cycle = nx.approximation.traveling_salesman_problem(G, weight="weight", cycle=True)
 
-    if tsp_cycle[0] != START_DEPOT['id']:
-        depot_index = tsp_cycle.index(START_DEPOT['id'])
+    if tsp_cycle[0] != s_id:
+        depot_index = tsp_cycle.index(s_id)
         tsp_cycle = tsp_cycle[depot_index:-1] + tsp_cycle[:depot_index]
     else:
         tsp_cycle = tsp_cycle[:-1]
@@ -169,7 +170,7 @@ def _calculate_networkx_fallback_route(target_bins: List[Dict[str, Any]], end_fa
         edge_data = G.get_edge_data(u, v)
         total_dist += edge_data["weight"]
 
-        if v not in (START_DEPOT['id'], end_facility['id']) and v not in visited_bins:
+        if v not in (s_id, end_facility['id']) and v not in visited_bins:
             visited_bins.add(v)
             b_info = bin_lookup[v]
             details.append({
@@ -191,7 +192,7 @@ def _calculate_networkx_fallback_route(target_bins: List[Dict[str, Any]], end_fa
     }
 
 
-def calculate_optimal_route() -> Dict[str, Any]:
+def calculate_optimal_route(mode: str = "static") -> Dict[str, Any]:
     # Fetch dynamic routing constraints from DB
     config = config_service.get_fleet_config()
     van_capacity = float(config.get("van_capacity", 500.0))
@@ -213,6 +214,30 @@ def calculate_optimal_route() -> Dict[str, Any]:
             target_bins.append(b)
             total_volume += (fill / 100.0) * cap
 
+    live_ops = []
+    starts_data = []
+    if mode == "dynamic":
+        from app.database import operators_collection
+        live_ops = list(operators_collection.find({"state": "live", "latitude": {"$ne": None}, "longitude": {"$ne": None}}))
+        if len(live_ops) == 0:
+            return {
+                "fleet_routes": [],
+                "fleet_totals": {
+                    "total_vans": 0, "total_distance": 0.0, "total_fuel": 0.0, "total_cost": 0.0
+                },
+                "message": "No live operators available for dynamic routing."
+            }
+        for op in live_ops:
+            starts_data.append({
+                "operator_id": str(op["_id"]),
+                "username": op["username"],
+                "lat": op["latitude"],
+                "lon": op["longitude"],
+                "location": f"Operator {op['username']} Location"
+            })
+    else:
+        starts_data = [START_DEPOT]
+
     if not target_bins:
         return {
             "fleet_routes": [],
@@ -226,18 +251,18 @@ def calculate_optimal_route() -> Dict[str, Any]:
         }
 
     # 1. Prepare Nodes for OR-Tools
-    # Node 0: Depot
-    # Node 1 to N: Target Bins
-    # Node N+1 to N+M: Intermediate Dummy Disposal Nodes
-    # Node N+M+1: Final Dummy End Node representing termination closest dump site
-    
     num_bins = len(target_bins)
     
-    # Dynamically inject 2 intermediate disposal nodes per physical endpoint facility
+    # Dynamically inject intermediate disposal nodes based on total volume
+    import math
+    num_facilities = len(END_FACILITIES)
+    required_dumps = int(math.ceil(total_volume / van_capacity)) if van_capacity > 0 else 2
+    dumps_per_facility = max(2, (required_dumps // num_facilities) + 2) # Adding 2 as a generous safety margin
+
     dummy_dump_nodes = []
     dummy_count = 1
     for ef in END_FACILITIES:
-        for _ in range(2):
+        for _ in range(dumps_per_facility):
             dummy_dump_nodes.append({
                 "bin_id": f"dump_mid_{ef['id']}_{dummy_count}",
                 "location": f"{ef['location']} (Intermediate Disposal)",
@@ -250,13 +275,13 @@ def calculate_optimal_route() -> Dict[str, Any]:
             })
             dummy_count += 1
             
+    num_starts = len(starts_data)
     num_dummy_dumps = len(dummy_dump_nodes)
-    num_nodes = num_bins + num_dummy_dumps + 2
-    depot_index = 0
+    num_nodes = num_starts + num_bins + num_dummy_dumps + 1
     dummy_end_index = num_nodes - 1
     
-    # Pre-calculate coordinates array covering Depot, regular bins, and intermediate facilities
-    coords = [START_DEPOT] + target_bins + dummy_dump_nodes
+    # Pre-calculate coordinates array
+    coords = starts_data + target_bins + dummy_dump_nodes
     
     # Extract latitudes and longitudes
     lats = np.array([c.get("latitude", c.get("lat")) for c in coords])
@@ -281,7 +306,7 @@ def calculate_optimal_route() -> Dict[str, Any]:
     
     # Assign costs between Depot, Bins, and Intermediate Disposal points
     edge_costs = dist_matrix_km * fuel_cost_per_km * COST_MULTIPLIER
-    distance_matrix[:num_bins + num_dummy_dumps + 1, :num_bins + num_dummy_dumps + 1] = edge_costs.astype(int)
+    distance_matrix[:num_nodes-1, :num_nodes-1] = edge_costs.astype(int)
     
     # Clear diagonal
     np.fill_diagonal(distance_matrix, 0)
@@ -305,15 +330,15 @@ def calculate_optimal_route() -> Dict[str, Any]:
     # Min distance to any end facility for each node
     min_dist_to_end = np.min(dist_to_ends_km, axis=1)
     
-    # All active collection nodes (bins and intermediate facilities) can terminate at the final dummy end node
-    distance_matrix[1:num_bins + num_dummy_dumps + 1, dummy_end_index] = (min_dist_to_end[1:] * fuel_cost_per_km * COST_MULTIPLIER).astype(int)
+    # All active collection nodes can terminate at the final dummy end node
+    distance_matrix[num_starts:num_nodes-1, dummy_end_index] = (min_dist_to_end[num_starts:] * fuel_cost_per_km * COST_MULTIPLIER).astype(int)
     
     # The Dummy End Node is a sink; leaving it costs 0
     distance_matrix[dummy_end_index, :] = 0
 
     # 3. Build Demands Array
     demands = [0] * num_nodes
-    for i, b in enumerate(target_bins, start=1):
+    for i, b in enumerate(target_bins, start=num_starts):
         volume = (b.get("fill_percentage", 0) / 100.0) * b.get("capacity", 100.0)
         demands[i] = int(volume * 10)  # Scale by 10 for integer precision
         
@@ -321,14 +346,16 @@ def calculate_optimal_route() -> Dict[str, Any]:
     
     # Apply negative absorbing demand weights to intermediate reload nodes
     for k in range(num_dummy_dumps):
-        d_idx = num_bins + 1 + k
+        d_idx = num_starts + num_bins + k
         demands[d_idx] = -scaled_van_capacity
     
     # Max vehicles we could possibly use
-    num_vehicles = num_bins
+    num_vehicles = num_starts if mode == "dynamic" else num_bins
+    starts_indices = list(range(num_starts)) if mode == "dynamic" else [0] * num_vehicles
+    ends_indices = [dummy_end_index] * num_vehicles
 
     # 4. Initialize OR-Tools Routing Model
-    manager = pywrapcp.RoutingIndexManager(num_nodes, num_vehicles, [depot_index] * num_vehicles, [dummy_end_index] * num_vehicles)
+    manager = pywrapcp.RoutingIndexManager(num_nodes, num_vehicles, starts_indices, ends_indices)
     routing = pywrapcp.RoutingModel(manager)
 
     # Register transit callback for Cost
@@ -360,16 +387,22 @@ def calculate_optimal_route() -> Dict[str, Any]:
     
     # Render intermediate dummy dump nodes fully optional via disjunctions
     for k in range(num_dummy_dumps):
-        d_idx = num_bins + 1 + k
+        d_idx = num_starts + num_bins + k
         routing.AddDisjunction([d_idx], 0)
         # Authorize localized slack dimension variable up to full capacity to cleanly reset cumulative loads
         capacity_dimension.SlackVar(d_idx).SetMax(scaled_van_capacity)
+        
+    # Allow dropping regular bins with an extremely high penalty to guarantee the solver always finds a valid mathematical path
+    # even if one van is assigned massive garbage
+    for i in range(num_bins):
+        b_idx = num_starts + i
+        routing.AddDisjunction([b_idx], 10000000)
 
     # 5. Solve the CVRP
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
     search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
-    search_parameters.time_limit.FromSeconds(3) # Max 3 seconds of solving
+    search_parameters.time_limit.FromSeconds(5) # Max 5 seconds of solving
     
     solution = routing.SolveWithParameters(search_parameters)
 
@@ -396,30 +429,31 @@ def calculate_optimal_route() -> Dict[str, Any]:
         route_nodes = []
         while not routing.IsEnd(index):
             node_idx = manager.IndexToNode(index)
-            if node_idx != depot_index and node_idx != dummy_end_index:
-                route_nodes.append(all_target_nodes[node_idx - 1])
+            if node_idx >= num_starts and node_idx != dummy_end_index:
+                route_nodes.append(all_target_nodes[node_idx - num_starts])
             index = solution.Value(routing.NextVar(index))
             
         if not route_nodes:
             continue
             
+        start_node_info = starts_data[manager.IndexToNode(routing.Start(vehicle_id))]
         last_bin = route_nodes[-1]
         lat = last_bin.get("latitude")
         lon = last_bin.get("longitude")
         closest_end = min(END_FACILITIES, key=lambda ef: haversine_distance(lat, lon, ef["lat"], ef["lon"]))
         
-        route_tasks.append((van_id, route_nodes, closest_end))
+        route_tasks.append((van_id, start_node_info, route_nodes, closest_end))
         van_id += 1
 
     # Fetch OSRM geometry concurrently
     def fetch_route_data(task):
-        vid, r_nodes, cend = task
+        vid, s_info, r_nodes, cend = task
         try:
-            r_data = _calculate_osrm_route(r_nodes, cend)
+            r_data = _calculate_osrm_route(s_info, r_nodes, cend)
         except Exception as e:
             logger.error(f"OSRM failed for van {vid}, falling back: {e}")
-            r_data = _calculate_networkx_fallback_route(r_nodes, cend)
-        return vid, r_nodes, cend, r_data
+            r_data = _calculate_networkx_fallback_route(s_info, r_nodes, cend)
+        return vid, s_info.get("operator_id"), r_nodes, cend, r_data
 
     fleet_routes = []
     tot_dist = 0.0
@@ -430,7 +464,7 @@ def calculate_optimal_route() -> Dict[str, Any]:
         future_to_task = {executor.submit(fetch_route_data, task): task for task in route_tasks}
         
         for future in concurrent.futures.as_completed(future_to_task):
-            vid, r_nodes, cend, route_data = future.result()
+            vid, operator_id, r_nodes, cend, route_data = future.result()
             
             dist = route_data["total_distance"]
             fuel = dist / mileage_kmpl if mileage_kmpl > 0 else 0.0
@@ -439,6 +473,7 @@ def calculate_optimal_route() -> Dict[str, Any]:
             
             fleet_routes.append({
                 "van_id": vid,
+                "operator_id": operator_id,
                 "route": route_data["route"],
                 "details": route_data["details"],
                 "distance_km": round(dist, 2),
