@@ -31,13 +31,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import bins, chat, operators, complaints
+from app.routers import bins, chat, operators, complaints, detection
 
 # Include application routers
 app.include_router(bins.router)
 app.include_router(chat.router)
 app.include_router(operators.router)
 app.include_router(complaints.router)
+app.include_router(detection.router)
 
 
 @app.get("/", tags=["Health"])

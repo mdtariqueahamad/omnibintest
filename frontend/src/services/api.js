@@ -160,3 +160,13 @@ export const updateComplaintStatus = async (id, status) => {
     throw error;
   }
 };
+
+export const detectPlasticBottle = async (base64Image) => {
+  try {
+    const response = await apiClient.post('/api/detection/plastic-bottle', { photo_base64: base64Image });
+    return response.data;
+  } catch (error) {
+    console.error("Error detecting plastic bottle:", error);
+    throw error;
+  }
+};

@@ -43,7 +43,7 @@ def create_complaint(complaint: ComplaintCreate):
             
         try:
             response = client.chat.completions.create(
-                model="nvidia/llama-3.2-nv-instruct",
+                model="meta-llama/llama-3.2-11b-vision-instruct",
                 messages=[
                     {
                         "role": "user",

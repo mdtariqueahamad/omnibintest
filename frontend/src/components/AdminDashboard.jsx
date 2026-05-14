@@ -10,6 +10,7 @@ import QuickActions from './QuickActions';
 import AlertsPanel from './AlertsPanel';
 import FuelAnalytics from './FuelAnalytics';
 import ComplaintsPanel from './ComplaintsPanel';
+import BottleScanner from './BottleScanner';
 import {
   fetchBins, fetchBinHistory, seedBins,
   randomizeBins, fetchOptimalRoute, fetchConfig, fetchAllOperators,
@@ -360,6 +361,11 @@ function AdminDashboard() {
         {/* ── COMPLAINTS tab ──────────────────────────────────── */}
         {activeTab === 'complaints' && (
           <ComplaintsPanel />
+        )}
+
+        {/* ── SCANNER tab ─────────────────────────────────────── */}
+        {activeTab === 'scanner' && (
+          <BottleScanner />
         )}
       </main>
 

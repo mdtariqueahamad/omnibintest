@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, MapPin, Route, History, Recycle, Sparkles, Wifi, WifiOff, Leaf, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, MapPin, Route, History, Recycle, Sparkles, Wifi, WifiOff, Leaf, AlertCircle, Scan } from 'lucide-react';
 
 const menuItems = [
   { id: 'dashboard', label: 'Live Overview',        icon: LayoutDashboard },
@@ -7,6 +7,7 @@ const menuItems = [
   { id: 'routes',    label: 'Route Optimizer',       icon: Route },
   { id: 'history',   label: 'Audit Logs',            icon: History },
   { id: 'complaints',label: 'Complaints',          icon: AlertCircle },
+  { id: 'scanner',   label: 'AI Scanner',            icon: Scan },
 ];
 
 const Sidebar = ({ activeTab, setActiveTab, isConnected }) => (

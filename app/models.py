@@ -139,3 +139,12 @@ class ComplaintResponse(ComplaintBase):
 
 class ComplaintUpdate(BaseModel):
     status: str = Field(..., description="New status for the complaint")
+
+
+class ImageDetectionRequest(BaseModel):
+    photo_base64: str = Field(..., description="Base64 encoded photo")
+
+
+class ImageDetectionResponse(BaseModel):
+    is_plastic_bottle: bool = Field(..., description="True if a plastic bottle is detected")
+    confidence_score: float = Field(..., description="AI confidence score percentage")
