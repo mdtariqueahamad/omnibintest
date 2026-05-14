@@ -6,17 +6,17 @@ import json
 from openai import OpenAI
 from app.config import settings
 from app.models import ComplaintCreate, ComplaintResponse, ComplaintUpdate
+from app.database import complaints_collection
 
 router = APIRouter(prefix="/api/complaints", tags=["Complaints"])
+
+from pymongo import ReturnDocument
 
 # Initialize OpenAI client with OpenRouter base URL
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=settings.openrouter_api_key,
 )
-
-# In-memory storage for complaints
-MOCK_COMPLAINTS_DB: List[dict] = []
 
 @router.post("/", response_model=ComplaintResponse)
 def create_complaint(complaint: ComplaintCreate):
@@ -76,7 +76,7 @@ def create_complaint(complaint: ComplaintCreate):
             new_complaint["garbage_quantity"] = "moderate"
             new_complaint["confidence_score"] = 50.0
 
-    MOCK_COMPLAINTS_DB.append(new_complaint)
+    complaints_collection.insert_one(new_complaint.copy())
     return new_complaint
 
 @router.get("/", response_model=List[ComplaintResponse])
@@ -85,17 +85,21 @@ def get_complaints():
     Retrieve all complaints for admin review.
     """
     # Sorting by newest first
-    sorted_complaints = sorted(MOCK_COMPLAINTS_DB, key=lambda x: x["timestamp"], reverse=True)
-    return sorted_complaints
+    complaints_cursor = complaints_collection.find({}, {"_id": 0}).sort("timestamp", -1)
+    return list(complaints_cursor)
 
 @router.put("/{complaint_id}", response_model=ComplaintResponse)
 def update_complaint_status(complaint_id: str, update_data: ComplaintUpdate):
     """
     Update the status of a specific complaint.
     """
-    for complaint in MOCK_COMPLAINTS_DB:
-        if complaint["complaint_id"] == complaint_id:
-            complaint["status"] = update_data.status
-            return complaint
+    result = complaints_collection.find_one_and_update(
+        {"complaint_id": complaint_id},
+        {"$set": {"status": update_data.status}},
+        return_document=ReturnDocument.AFTER,
+        projection={"_id": 0}
+    )
+    if result:
+        return result
     
     raise HTTPException(status_code=404, detail="Complaint not found")

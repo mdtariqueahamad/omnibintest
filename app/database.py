@@ -12,6 +12,7 @@ bins_collection = db["bins"]
 history_collection = db["bin_history"]
 config_collection = db["fleet_config"]
 operators_collection = db["operators"]
+complaints_collection = db["complaints"]
 
 
 def init_db_indexes():
