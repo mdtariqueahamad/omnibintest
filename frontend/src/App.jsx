@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './components/LoginPage';
 import AdminDashboard from './components/AdminDashboard';
 import CitizenMap from './components/CitizenMap';
+import ComplaintForm from './components/ComplaintForm';
 import { ThemeProvider } from './context/ThemeContext';
 
 import OperatorDashboard from './components/OperatorDashboard';
@@ -25,6 +26,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<LoginPage setRole={setRole} setOperatorId={setOperatorId} />} />
+          <Route path="/complaint" element={<ComplaintForm />} />
           
           <Route 
             path="/dashboard" 

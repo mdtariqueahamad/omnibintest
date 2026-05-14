@@ -131,3 +131,32 @@ export const fetchOsrmRoute = async (coordString) => {
   }
 };
 
+export const submitComplaint = async (data) => {
+  try {
+    const response = await apiClient.post('/api/complaints/', data);
+    return response.data;
+  } catch (error) {
+    console.error("Error submitting complaint:", error);
+    throw error;
+  }
+};
+
+export const fetchComplaints = async () => {
+  try {
+    const response = await apiClient.get('/api/complaints/');
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching complaints:", error);
+    throw error;
+  }
+};
+
+export const updateComplaintStatus = async (id, status) => {
+  try {
+    const response = await apiClient.put(`/api/complaints/${id}`, { status });
+    return response.data;
+  } catch (error) {
+    console.error("Error updating complaint status:", error);
+    throw error;
+  }
+};

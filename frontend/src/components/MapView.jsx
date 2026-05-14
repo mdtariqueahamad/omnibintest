@@ -125,7 +125,7 @@ const getCustomIcon = (fillPercentage, isDimmed = false) => {
   });
 };
 
-const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL', operators = [], routingMode = 'static' }) => {
+const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL', operators = [], routingMode = 'static', predictions = {} }) => {
   // Center map focused around localized Bhopal coordinates initially
   const centerPosition = [23.2360, 77.4700];
 
@@ -279,6 +279,12 @@ const MapView = ({ bins, optimalRoute, setSelectedBin, selectedVan = 'ALL', oper
                     <div className="flex justify-between">
                       <span className="text-slate-400">Max Capacity:</span>
                       <span className="font-medium text-slate-300">{bin.capacity}L</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Hours to Full:</span>
+                      <span className="font-bold text-teal-400">
+                        {predictions[bin.bin_id] !== undefined ? (predictions[bin.bin_id] === -1 ? '>168h' : `${predictions[bin.bin_id]}h`) : '...'}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Priority Tier:</span>

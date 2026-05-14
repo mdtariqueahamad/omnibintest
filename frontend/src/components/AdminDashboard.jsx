@@ -9,6 +9,7 @@ import FleetConfigModal from './FleetConfigModal';
 import QuickActions from './QuickActions';
 import AlertsPanel from './AlertsPanel';
 import FuelAnalytics from './FuelAnalytics';
+import ComplaintsPanel from './ComplaintsPanel';
 import {
   fetchBins, fetchBinHistory, seedBins,
   randomizeBins, fetchOptimalRoute, fetchConfig, fetchAllOperators,
@@ -51,14 +52,12 @@ function AdminDashboard() {
   const [routeLoading,      setRouteLoading]      = useState(false);
   const [routingMode,       setRoutingMode]       = useState('static');
   const [operators,         setOperators]         = useState([]);
-  const [predictHours,      setPredictHours]      = useState(12);
-  const [activePredictionHours, setActivePredictionHours] = useState(0);
   const [predicting,        setPredicting]        = useState(false);
+  const [predictions,       setPredictions]       = useState({});
 
   /* polling */
   useEffect(() => {
     const load = async () => {
-      if (activePredictionHours > 0) return;
       try { 
         setBins(await fetchBins()); 
         setOperators(await fetchAllOperators());
@@ -70,7 +69,22 @@ function AdminDashboard() {
     fetchConfig().then(setConfig).catch(console.error);
     const iv = setInterval(load, 5000);
     return () => clearInterval(iv);
-  }, [activePredictionHours]);
+  }, []);
+
+  /* background prediction polling for 'hours to full' */
+  useEffect(() => {
+    const fetchPreds = async () => {
+      try {
+        const pBins = await fetchPredictedBins(1); // Hours ahead doesn't matter for hours_until_full
+        const predMap = {};
+        pBins.forEach(p => { predMap[p.bin_id] = p.hours_until_full; });
+        setPredictions(predMap);
+      } catch (e) { console.error("Prediction fetch failed", e); }
+    };
+    fetchPreds();
+    const iv = setInterval(fetchPreds, 60000);
+    return () => clearInterval(iv);
+  }, []);
 
   /* history on bin select */
   useEffect(() => {
@@ -106,11 +120,7 @@ function AdminDashboard() {
   const handleOptimizeRoute = async () => {
     setRouteLoading(true);
     try { 
-      if (activePredictionHours > 0) {
-        setOptimalRoute(await fetchPredictedRoute(activePredictionHours, routingMode));
-      } else {
-        setOptimalRoute(await fetchOptimalRoute(routingMode));
-      }
+      setOptimalRoute(await fetchOptimalRoute(routingMode));
       setSelectedVan('ALL'); 
     }
     catch (e) { console.error(e); }
@@ -118,42 +128,19 @@ function AdminDashboard() {
   };
 
   const handlePredict = async () => {
-    if (predictHours === 0) {
-      setActivePredictionHours(0);
-      setBins(await fetchBins());
-      setOptimalRoute(await fetchOptimalRoute(routingMode));
-      return;
-    }
     setPredicting(true);
-    setActivePredictionHours(predictHours);
     try {
-      const pBins = await fetchPredictedBins(predictHours);
-      const currentBins = await fetchBins();
-      const mergedBins = currentBins.map(b => {
-        const p = pBins.find(pb => pb.bin_id === b.bin_id);
-        if (p) {
-          b.fill_percentage = p.predicted_fill_percentage;
-          b.confidence_percent = p.error_rate_high ? 15.0 : 98.0;
-          if (b.fill_percentage >= 90) b.status = 'Critical';
-          else if (b.fill_percentage >= 70) b.status = 'Needs Collection';
-          else b.status = 'OK';
-        }
-        return b;
-      });
-      setBins(mergedBins);
-      setOptimalRoute(await fetchPredictedRoute(predictHours, routingMode));
-      setSelectedVan('ALL');
+      const pBins = await fetchPredictedBins(1);
+      const predMap = {};
+      pBins.forEach(p => { predMap[p.bin_id] = p.hours_until_full; });
+      setPredictions(predMap);
     } catch (e) { console.error(e); }
     finally { setPredicting(false); }
   };
 
   const handleConfigSaved = async () => {
     try { 
-      if (activePredictionHours > 0) {
-        setOptimalRoute(await fetchPredictedRoute(activePredictionHours, routingMode));
-      } else {
-        setOptimalRoute(await fetchOptimalRoute(routingMode));
-      }
+      setOptimalRoute(await fetchOptimalRoute(routingMode));
       setSelectedVan('ALL'); 
     }
     catch (e) { console.error(e); }
@@ -190,22 +177,14 @@ function AdminDashboard() {
               <div className="flex items-center gap-2 flex-wrap">
                 {/* Predictor */}
                 <div className="flex items-center gap-2 px-3 py-2 rounded-xl glass-card text-xs">
-                  <span className="font-bold" style={{ color: 'rgba(13,74,47,0.7)' }}>Prediction:</span>
-                  <input 
-                    type="range" 
-                    min="0" max="24" 
-                    value={predictHours} 
-                    onChange={e => setPredictHours(parseInt(e.target.value))} 
-                    className="w-24 accent-teal-600 cursor-pointer"
-                  />
-                  <span className="font-bold w-6 text-right" style={{ color: '#0d4a2f' }}>+{predictHours}h</span>
+                  <span className="font-bold" style={{ color: 'rgba(13,74,47,0.7)' }}>Predictions:</span>
                   <button 
                     onClick={handlePredict}
                     disabled={predicting}
-                    className="ml-2 px-2.5 py-1 rounded-lg text-[10px] uppercase tracking-wider font-bold transition-all disabled:opacity-50 hover:scale-105"
-                    style={{ background: activePredictionHours === predictHours && predictHours !== 0 ? '#0d4a2f' : '#0d9488', color: 'white' }}
+                    className="ml-2 px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-wider font-bold transition-all disabled:opacity-50 hover:scale-105"
+                    style={{ background: '#0d9488', color: 'white' }}
                   >
-                    {predicting ? '...' : predictHours === 0 ? 'Live' : 'Predict'}
+                    {predicting ? 'Calculating...' : 'Predict Fill Times'}
                   </button>
                 </div>
                 <div className="flex items-center gap-2 px-3 py-2 rounded-xl glass-card text-xs">
@@ -249,7 +228,7 @@ function AdminDashboard() {
             {/* Map + Alerts row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
-                <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} operators={operators} routingMode={routingMode} />
+                <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} operators={operators} routingMode={routingMode} predictions={predictions} />
               </div>
               <div className="flex flex-col gap-4">
                 <AlertsPanel bins={bins} />
@@ -275,7 +254,7 @@ function AdminDashboard() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr style={{ borderBottom: '1px solid rgba(13,74,47,0.10)' }}>
-                      {['Location','ID','Fill Level','Capacity','Priority','Confidence','Status'].map(h => (
+                      {['Location','ID','Fill Level','Capacity','Priority','Confidence','Hours to Full','Status'].map(h => (
                         <th key={h} className="text-left py-2 px-2 font-bold uppercase tracking-wider"
                             style={{ color: 'rgba(13,74,47,0.40)', fontSize: 9 }}>{h}</th>
                       ))}
@@ -314,6 +293,9 @@ function AdminDashboard() {
                             {(b.confidence_percent ?? 100).toFixed(1)}%
                           </span>
                         </td>
+                        <td className="py-2.5 px-2 font-bold" style={{ color: '#0d9488' }}>
+                          {predictions[b.bin_id] !== undefined ? (predictions[b.bin_id] === -1 ? '>168h' : `${predictions[b.bin_id]}h`) : '...'}
+                        </td>
                         <td className="py-2.5 px-2"><span className={statusChip(b.status)}>{b.status}</span></td>
                       </tr>
                     ))}
@@ -335,7 +317,7 @@ function AdminDashboard() {
         {activeTab === 'map' && (
           <div className="space-y-4 animate-fade-in">
             <PageHeader title="Live Telemetry Map" sub="Click markers for sensor details · Active routes shown in real-time" />
-            <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} operators={operators} routingMode={routingMode} />
+            <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} operators={operators} routingMode={routingMode} predictions={predictions} />
           </div>
         )}
 
@@ -347,7 +329,7 @@ function AdminDashboard() {
               <RoutePanel optimalRoute={optimalRoute} setOptimalRoute={setOptimalRoute} bins={bins} routingMode={routingMode} setRoutingMode={setRoutingMode} />
               <FuelAnalytics optimalRoute={optimalRoute} config={config} />
             </div>
-            <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} operators={operators} routingMode={routingMode} />
+            <MapView bins={bins} optimalRoute={optimalRoute} setSelectedBin={setSelectedBin} selectedVan={selectedVan} operators={operators} routingMode={routingMode} predictions={predictions} />
           </div>
         )}
 
@@ -373,6 +355,11 @@ function AdminDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ── COMPLAINTS tab ──────────────────────────────────── */}
+        {activeTab === 'complaints' && (
+          <ComplaintsPanel />
         )}
       </main>
 

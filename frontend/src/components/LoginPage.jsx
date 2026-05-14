@@ -299,6 +299,21 @@ const LoginPage = ({ setRole, setOperatorId }) => {
                 ))}
               </div>
             </div>
+
+            {/* Civilian Complaint Link */}
+            <div className="mt-4 text-center">
+              <p className="text-xs" style={{ color: 'rgba(13,74,47,0.65)' }}>
+                See an overflowing bin?{' '}
+                <button 
+                  type="button"
+                  onClick={() => navigate('/complaint')}
+                  className="font-bold transition-opacity hover:opacity-70 underline"
+                  style={{ color: '#16a34a' }}
+                >
+                  Register a Complaint
+                </button>
+              </p>
+            </div>
           </div>
         </div>
       </div>

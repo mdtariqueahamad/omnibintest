@@ -1,11 +1,12 @@
 import React from 'react';
-import { LayoutDashboard, MapPin, Route, History, Recycle, Sparkles, Wifi, WifiOff, Leaf } from 'lucide-react';
+import { LayoutDashboard, MapPin, Route, History, Recycle, Sparkles, Wifi, WifiOff, Leaf, AlertCircle } from 'lucide-react';
 
 const menuItems = [
   { id: 'dashboard', label: 'Live Overview',        icon: LayoutDashboard },
   { id: 'map',       label: 'Telemetry Map',         icon: MapPin },
   { id: 'routes',    label: 'Route Optimizer',       icon: Route },
   { id: 'history',   label: 'Audit Logs',            icon: History },
+  { id: 'complaints',label: 'Complaints',          icon: AlertCircle },
 ];
 
 const Sidebar = ({ activeTab, setActiveTab, isConnected }) => (

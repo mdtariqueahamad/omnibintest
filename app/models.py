@@ -43,6 +43,7 @@ class BinHistoryResponse(BaseModel):
 class BinPrediction(BaseModel):
     bin_id: str = Field(..., description="Unique hardware identifier for the bin")
     predicted_fill_percentage: float = Field(..., description="Predicted fill level percentage")
+    hours_until_full: int = Field(..., description="Predicted hours until bin reaches 100% capacity (-1 if >168h)")
     error_rate_high: bool = Field(..., description="True if prediction has high uncertainty due to low data")
     data_points_used: int = Field(..., description="Number of historical data points used for prediction")
     target_future_timestamp: str = Field(..., description="ISO timestamp of the predicted future state")
@@ -115,3 +116,26 @@ class OperatorLocationUpdate(BaseModel):
     latitude: float
     longitude: float
 
+
+class ComplaintBase(BaseModel):
+    description: str = Field(..., description="Detailed description of the complaint")
+    location: Optional[str] = Field(None, description="Optional location related to the complaint")
+    latitude: Optional[float] = Field(None, description="Optional GPS latitude")
+    longitude: Optional[float] = Field(None, description="Optional GPS longitude")
+    photo_base64: Optional[str] = Field(None, description="Optional base64 encoded photo")
+
+
+class ComplaintCreate(ComplaintBase):
+    pass
+
+
+class ComplaintResponse(ComplaintBase):
+    complaint_id: str
+    timestamp: str
+    status: str = Field("Pending", description="Status: 'Pending', 'In Progress', 'Resolved'")
+    garbage_quantity: Optional[str] = Field(None, description="AI detected garbage quantity (critical, moderate, normal)")
+    confidence_score: Optional[float] = Field(None, description="AI confidence score percentage")
+
+
+class ComplaintUpdate(BaseModel):
+    status: str = Field(..., description="New status for the complaint")
